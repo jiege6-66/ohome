@@ -6,11 +6,22 @@ on:
     tags:
       - "*"
 
+permissions:
+  contents: write
+
 jobs:
   build-android:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Require tag ref
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF_TYPE}" != "tag" ]]; then
+            echo "This workflow must run on a tag ref."
+            exit 1
+          fi
+
       - name: Checkout
         uses: actions/checkout@v4
         with:
@@ -44,14 +55,43 @@ jobs:
           storeFile=upload-keystore.jks
           EOF
 
-      - name: Build release APKs
+      - name: Build release APK
         working-directory: app
         shell: bash
-        run: bash build_prod.sh
+        run: |
+          BUILD_METADATA_FILE="$RUNNER_TEMP/ohome-release.env" \
+          RELEASE_TAG="${GITHUB_REF_NAME}" \
+          bash build_prod.sh
 
-      - name: Upload APK artifacts
-        uses: actions/upload-artifact@v4
+          cat "$RUNNER_TEMP/ohome-release.env" >> "$GITHUB_ENV"
+
+      - name: Prepare release assets
+        shell: bash
+        run: |
+          APK_SOURCE="app/${APK_RELATIVE_PATH}"
+          APK_ASSET="app/build/app/outputs/flutter-apk/ohome-release.apk"
+          MANIFEST_ASSET="app/build/app/outputs/flutter-apk/android.json"
+
+          cp "$APK_SOURCE" "$APK_ASSET"
+          APK_SHA256=$(shasum -a 256 "$APK_ASSET" | awk '{print $1}')
+
+          cat > "$MANIFEST_ASSET" <<EOF
+          {
+            "versionName": "${BUILD_NAME}",
+            "versionCode": ${BUILD_NUMBER},
+            "apkUrl": "https://github.com/${GITHUB_REPOSITORY}/releases/latest/download/ohome-release.apk",
+            "sha256": "${APK_SHA256}",
+            "releaseNotes": "GitHub Release ${GITHUB_REF_NAME}"
+          }
+          EOF
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
         with:
-          name: android-release-apks
-          path: app/build/app/outputs/flutter-apk/*.apk
-          if-no-files-found: error
+          tag_name: ${{ github.ref_name }}
+          generate_release_notes: true
+          overwrite_files: true
+          fail_on_unmatched_files: true
+          files: |
+            app/build/app/outputs/flutter-apk/ohome-release.apk
+            app/build/app/outputs/flutter-apk/android.json

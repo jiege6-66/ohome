@@ -3,12 +3,14 @@ set -euo pipefail
 
 cd "$(dirname "$0")"
 
-STATE_FILE=".build_number"
 PUBSPEC_FILE="pubspec.yaml"
 APP_ENV="prod"
 OUTPUT_DIR="build/app/outputs/flutter-apk"
+APK_FILENAME="app-release.apk"
 DRY_RUN=""
 REQUESTED_BUILD_NUMBER=""
+BUILD_METADATA_FILE="${BUILD_METADATA_FILE:-}"
+RELEASE_TAG="${RELEASE_TAG:-}"
 
 # ── Parse arguments ──────────────────────────────────────────────
 if [[ "${1:-}" == "--dry-run" ]]; then
@@ -29,7 +31,7 @@ if [[ ! -f "$PUBSPEC_FILE" ]]; then
   exit 1
 fi
 
-VERSION_LINE=$(grep -m1 '^version:' "$PUBSPEC_FILE" | cut -d':' -f2 | tr -d ' ')
+VERSION_LINE=$(grep -m1 '^version:' "$PUBSPEC_FILE" | cut -d':' -f2 | tr -d ' \r')
 
 if [[ -z "$VERSION_LINE" ]]; then
   echo "[ERROR] version was not found in \"$PUBSPEC_FILE\"."
@@ -58,33 +60,12 @@ if [[ -n "$REQUESTED_BUILD_NUMBER" ]]; then
   BUILD_NUMBER="$REQUESTED_BUILD_NUMBER"
   BUILD_NUMBER_SOURCE="argument"
 else
-  LAST_BUILD_NUMBER=""
-  if [[ -f "$STATE_FILE" ]]; then
-    LAST_BUILD_NUMBER=$(tr -d '[:space:]' < "$STATE_FILE")
-    if ! is_number "$LAST_BUILD_NUMBER"; then
-      echo "[ERROR] Invalid value in \"$STATE_FILE\": \"$LAST_BUILD_NUMBER\"."
-      exit 1
-    fi
+  if ! is_number "$PUBSPEC_BUILD_NUMBER"; then
+    echo "[ERROR] Invalid pubspec build number \"$PUBSPEC_BUILD_NUMBER\"."
+    exit 1
   fi
-
-  if [[ -n "$LAST_BUILD_NUMBER" ]]; then
-    BUILD_NUMBER=$((LAST_BUILD_NUMBER + 1))
-    BUILD_NUMBER_SOURCE="local state"
-  else
-    GIT_BUILD_NUMBER=$(git rev-list --count HEAD 2>/dev/null || true)
-
-    if [[ -n "$GIT_BUILD_NUMBER" ]] && is_number "$GIT_BUILD_NUMBER"; then
-      BUILD_NUMBER=$((GIT_BUILD_NUMBER + 1))
-      BUILD_NUMBER_SOURCE="git commit count"
-    else
-      if ! is_number "$PUBSPEC_BUILD_NUMBER"; then
-        echo "[ERROR] Invalid pubspec build number \"$PUBSPEC_BUILD_NUMBER\"."
-        exit 1
-      fi
-      BUILD_NUMBER=$((PUBSPEC_BUILD_NUMBER + 1))
-      BUILD_NUMBER_SOURCE="pubspec seed"
-    fi
-  fi
+  BUILD_NUMBER="$PUBSPEC_BUILD_NUMBER"
+  BUILD_NUMBER_SOURCE="pubspec version"
 fi
 
 if [[ "$BUILD_NUMBER" -le 0 ]]; then
@@ -92,22 +73,45 @@ if [[ "$BUILD_NUMBER" -le 0 ]]; then
   exit 1
 fi
 
-# ── Version codes per ABI ────────────────────────────────────────
-ARM32_VERSION_CODE=$((1000 + BUILD_NUMBER))
-ARM64_VERSION_CODE=$((2000 + BUILD_NUMBER))
-X64_VERSION_CODE=$((4000 + BUILD_NUMBER))
+if [[ -n "$RELEASE_TAG" ]]; then
+  NORMALIZED_TAG="${RELEASE_TAG#refs/tags/}"
+  if [[ "$NORMALIZED_TAG" != "$BUILD_NAME" && "$NORMALIZED_TAG" != "v$BUILD_NAME" ]]; then
+    echo "[ERROR] Release tag \"$NORMALIZED_TAG\" does not match pubspec version \"$BUILD_NAME\"."
+    exit 1
+  fi
+fi
+
+APK_RELATIVE_PATH="$OUTPUT_DIR/$APK_FILENAME"
 
 echo ""
 echo "Build name   : $BUILD_NAME"
 echo "Build number : $BUILD_NUMBER ($BUILD_NUMBER_SOURCE)"
-echo "Version code : armeabi-v7a=$ARM32_VERSION_CODE, arm64-v8a=$ARM64_VERSION_CODE, x86_64=$X64_VERSION_CODE"
+echo "Release tag  : ${RELEASE_TAG:-<none>}"
+echo "APK file     : $APK_RELATIVE_PATH"
 echo "Output dir   : $OUTPUT_DIR"
 echo ""
 
+write_metadata() {
+  if [[ -z "$BUILD_METADATA_FILE" ]]; then
+    return
+  fi
+
+  mkdir -p "$(dirname "$BUILD_METADATA_FILE")"
+  cat > "$BUILD_METADATA_FILE" <<EOF
+BUILD_NAME=$BUILD_NAME
+BUILD_NUMBER=$BUILD_NUMBER
+DISPLAY_VERSION=$BUILD_NAME+$BUILD_NUMBER
+APK_RELATIVE_PATH=$APK_RELATIVE_PATH
+APK_FILENAME=$APK_FILENAME
+OUTPUT_DIR=$OUTPUT_DIR
+EOF
+}
+
 # ── Dry run ──────────────────────────────────────────────────────
 if [[ -n "$DRY_RUN" ]]; then
+  write_metadata
   echo "[DRY RUN] flutter pub get"
-  echo "[DRY RUN] flutter build apk --release --split-per-abi --dart-define=APP_ENV=$APP_ENV --build-name=$BUILD_NAME --build-number=$BUILD_NUMBER"
+  echo "[DRY RUN] flutter build apk --release --dart-define=APP_ENV=$APP_ENV --build-name=$BUILD_NAME --build-number=$BUILD_NUMBER"
   exit 0
 fi
 
@@ -118,7 +122,7 @@ if [[ $? -ne 0 ]]; then
   exit 1
 fi
 
-flutter build apk --release --split-per-abi \
+flutter build apk --release \
   --dart-define=APP_ENV="$APP_ENV" \
   --build-name="$BUILD_NAME" \
   --build-number="$BUILD_NUMBER"
@@ -127,9 +131,10 @@ if [[ $? -ne 0 ]]; then
   exit 1
 fi
 
-# ── Persist build number ─────────────────────────────────────────
-echo "$BUILD_NUMBER" > "$STATE_FILE"
+write_metadata
 
 echo ""
 echo "Build finished successfully."
-echo "State file updated: $STATE_FILE"
+if [[ -n "$BUILD_METADATA_FILE" ]]; then
+  echo "Build metadata: $BUILD_METADATA_FILE"
+fi
