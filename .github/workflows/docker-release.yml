@@ -17,11 +17,28 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Derive image name
-        id: image
+      - name: Derive image names
+        id: images
         shell: bash
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
         run: |
-          echo "name=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+          if [[ -z "$DOCKERHUB_USERNAME" ]]; then
+            echo "::error::Missing DOCKERHUB_USERNAME secret."
+            exit 1
+          fi
+
+          if [[ -z "$DOCKERHUB_TOKEN" ]]; then
+            echo "::error::Missing DOCKERHUB_TOKEN secret."
+            exit 1
+          fi
+
+          repo_name="${GITHUB_REPOSITORY#*/}"
+          repo_name="${repo_name,,}"
+
+          echo "ghcr=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+          echo "dockerhub=docker.io/${DOCKERHUB_USERNAME,,}/${repo_name}" >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -33,11 +50,20 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          registry: docker.io
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
       - name: Extract Docker metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ steps.image.outputs.name }}
+          images: |
+            ${{ steps.images.outputs.ghcr }}
+            ${{ steps.images.outputs.dockerhub }}
           tags: |
             type=ref,event=tag
           labels: |
