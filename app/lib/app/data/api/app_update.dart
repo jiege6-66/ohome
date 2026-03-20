@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import '../../utils/http_client.dart';
 import '../models/app_update_info.dart';
 
@@ -73,6 +75,18 @@ class AppUpdateApi {
   static Map<String, dynamic>? _asMap(dynamic value) {
     if (value is Map<String, dynamic>) return value;
     if (value is Map) return value.cast<String, dynamic>();
+    if (value is String) {
+      final decoded = jsonDecode(value);
+      if (decoded is Map<String, dynamic>) return decoded;
+      if (decoded is Map) return decoded.cast<String, dynamic>();
+      return null;
+    }
+    if (value is List<int>) {
+      final decoded = jsonDecode(utf8.decode(value));
+      if (decoded is Map<String, dynamic>) return decoded;
+      if (decoded is Map) return decoded.cast<String, dynamic>();
+      return null;
+    }
     return null;
   }
 
