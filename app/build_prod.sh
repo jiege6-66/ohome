@@ -78,8 +78,8 @@ if [[ -n "$RELEASE_TAG" ]]; then
   EXPECTED_TAGS=(
     "$BUILD_NAME"
     "v$BUILD_NAME"
-    "$BUILD_NAME-build$BUILD_NUMBER"
-    "v$BUILD_NAME-build$BUILD_NUMBER"
+    "$BUILD_NAME-rc$BUILD_NUMBER"
+    "v$BUILD_NAME-rc$BUILD_NUMBER"
   )
 
   TAG_MATCHED=0
