@@ -1,0 +1,50 @@
+name: ohome
+description: "A new Flutter project."
+publish_to: "none" # Remove this line if you wish to publish to pub.dev
+
+version: 0.0.3+1
+
+environment:
+  sdk: ^3.10.3
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.8
+  get: ^4.7.3
+  flutter_screenutil: ^5.9.3
+  dio: ^5.7.0
+  shared_preferences: ^2.3.2
+  flutter_staggered_grid_view: ^0.7.0
+  flutter_secure_storage: ^9.2.2
+  card_swiper: ^3.0.1
+  media_kit: ^1.2.6
+  media_kit_video: ^2.0.1
+  media_kit_libs_video: ^1.0.7
+  audio_service: ^0.18.18
+  audio_session: ^0.2.2
+  wakelock_plus: ^1.2.8
+  ota_update: ^7.1.0
+  package_info_plus: ^9.0.0
+  image_picker: ^1.1.2
+  multicast_dns: ^0.3.3
+  flutter_inappwebview: ^6.1.5
+  web_socket_channel: ^3.0.3
+
+dev_dependencies:
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/images/
+    - assets/env/
+
+  fonts:
+    - family: AlibabaPuHuiTi
+      fonts:
+        - asset: assets/fonts/AlibabaPuHuiTi-3-55-Regular.ttf

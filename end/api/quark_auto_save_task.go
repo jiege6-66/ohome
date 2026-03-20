@@ -1,0 +1,114 @@
+package api
+
+import (
+	"ohome/service/dto"
+	"ohome/utils"
+
+	"github.com/gin-gonic/gin"
+)
+
+type QuarkAutoSaveTask struct {
+	BaseApi
+}
+
+func NewQuarkAutoSaveTaskApi() QuarkAutoSaveTask {
+	return QuarkAutoSaveTask{BaseApi: NewBaseApi()}
+}
+
+// GetList 获取任务列表（分页）
+func (a *QuarkAutoSaveTask) GetList(c *gin.Context) {
+	var listDTO dto.QuarkAutoSaveTaskListDTO
+	if err := a.Request(RequestOptions{Ctx: c, DTO: &listDTO}).GetErrors(); err != nil {
+		return
+	}
+	tasks, total, err := quarkAutoSaveTaskService.GetList(&listDTO)
+	if err != nil {
+		utils.FailWithMessage(err.Error(), c)
+		return
+	}
+	utils.OkWithData(gin.H{"records": tasks, "total": total}, c)
+}
+
+func (a *QuarkAutoSaveTask) GetByID(c *gin.Context) {
+	var idDTO dto.CommonIDDTO
+	if err := a.Request(RequestOptions{Ctx: c, DTO: &idDTO}).GetErrors(); err != nil {
+		return
+	}
+	task, err := quarkAutoSaveTaskService.GetByID(&idDTO)
+	if err != nil {
+		utils.FailWithMessage(err.Error(), c)
+		return
+	}
+	utils.OkWithData(task, c)
+}
+
+func (a *QuarkAutoSaveTask) AddOrUpdate(c *gin.Context) {
+	var updateDTO dto.QuarkAutoSaveTaskUpdateDTO
+	if err := a.Request(RequestOptions{Ctx: c, DTO: &updateDTO}).GetErrors(); err != nil {
+		return
+	}
+	if err := quarkAutoSaveTaskService.AddOrUpdate(&updateDTO); err != nil {
+		utils.FailWithMessage(err.Error(), c)
+		return
+	}
+	utils.Ok(c)
+}
+
+func (a *QuarkAutoSaveTask) Delete(c *gin.Context) {
+	var idDTO dto.CommonIDDTO
+	if err := a.Request(RequestOptions{Ctx: c, DTO: &idDTO}).GetErrors(); err != nil {
+		return
+	}
+	if err := quarkAutoSaveTaskService.DeleteByID(&idDTO); err != nil {
+		utils.FailWithMessage(err.Error(), c)
+		return
+	}
+	utils.OkWithMessage("删除成功", c)
+}
+
+func (a *QuarkAutoSaveTask) RunOnce(c *gin.Context) {
+	loginUser, err := getLoginUser(c)
+	if err != nil {
+		utils.FailWithMessage(err.Error(), c)
+		return
+	}
+	var idDTO dto.CommonIDDTO
+	if err := a.Request(RequestOptions{Ctx: c, DTO: &idDTO}).GetErrors(); err != nil {
+		return
+	}
+	task, err := quarkAutoSaveTaskService.GetByID(&idDTO)
+	if err != nil {
+		utils.FailWithMessage(err.Error(), c)
+		return
+	}
+	transferTask, err := quarkAutoSaveTaskService.RunOnce(task, loginUser.ID)
+	if err != nil {
+		utils.FailWithMessage(err.Error(), c)
+		return
+	}
+	utils.OkWithData(gin.H{
+		"taskId": transferTask.ID,
+		"status": transferTask.Status,
+	}, c)
+}
+
+func (a *QuarkAutoSaveTask) TransferOnce(c *gin.Context) {
+	loginUser, err := getLoginUser(c)
+	if err != nil {
+		utils.FailWithMessage(err.Error(), c)
+		return
+	}
+	var transferDTO dto.QuarkAutoSaveTransferDTO
+	if err := a.Request(RequestOptions{Ctx: c, DTO: &transferDTO}).GetErrors(); err != nil {
+		return
+	}
+	transferTask, err := quarkAutoSaveTaskService.TransferOnce(&transferDTO, loginUser.ID)
+	if err != nil {
+		utils.FailWithMessage(err.Error(), c)
+		return
+	}
+	utils.OkWithData(gin.H{
+		"taskId": transferTask.ID,
+		"status": transferTask.Status,
+	}, c)
+}

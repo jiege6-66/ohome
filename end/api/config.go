@@ -1,0 +1,192 @@
+package api
+
+import (
+	"ohome/model"
+	"ohome/service/dto"
+	"ohome/utils"
+	"strings"
+
+	"github.com/gin-gonic/gin"
+)
+
+const sensitiveConfigKeyQuarkCookies = "quark_cookies"
+const sensitiveConfigKeyQuarkSearchHTTPProxy = "quark_search_http_proxy"
+const sensitiveConfigKeyQuarkSearchHTTPSProxy = "quark_search_https_proxy"
+const sensitiveConfigKeyQuarkSearchChannels = "quark_search_channels"
+const sensitiveConfigKeyQuarkSearchEnabledPlugins = "quark_search_enabled_plugins"
+
+var sensitiveConfigKeys = map[string]struct{}{
+	sensitiveConfigKeyQuarkCookies:              {},
+	sensitiveConfigKeyQuarkSearchHTTPProxy:      {},
+	sensitiveConfigKeyQuarkSearchHTTPSProxy:     {},
+	sensitiveConfigKeyQuarkSearchChannels:       {},
+	sensitiveConfigKeyQuarkSearchEnabledPlugins: {},
+}
+
+type Config struct {
+	BaseApi
+}
+
+func NewConfigApi() Config {
+	return Config{
+		BaseApi: NewBaseApi(),
+	}
+}
+
+// GetConfigList 获取参数列表（分页）
+func (config *Config) GetConfigList(c *gin.Context) {
+	loginUser, err := getLoginUser(c)
+	if err != nil {
+		utils.FailWithMessage(err.Error(), c)
+		return
+	}
+
+	var iConfigListDTO dto.ConfigListDTO
+	if err := config.Request(RequestOptions{Ctx: c, DTO: &iConfigListDTO}).GetErrors(); err != nil {
+		return
+	}
+
+	if !loginUser.IsSuperAdmin() {
+		if isSensitiveConfigKey(iConfigListDTO.Key) || containsSensitiveConfigKeys(iConfigListDTO.Keys) {
+			utils.PermissionFail("无权限访问", c)
+			return
+		}
+		iConfigListDTO.ExcludeKeys = sensitiveConfigKeyList()
+	}
+
+	giConfigList, nTotal, err := configService.GetConfigList(&iConfigListDTO)
+
+	if err != nil {
+		utils.FailWithMessage(err.Error(), c)
+		return
+	}
+
+	utils.OkWithData(gin.H{
+		"records": giConfigList,
+		"total":   nTotal,
+	}, c)
+}
+
+// GetConfigById  根据id获取配置
+func (config *Config) GetConfigById(c *gin.Context) {
+	loginUser, err := getLoginUser(c)
+	if err != nil {
+		utils.FailWithMessage(err.Error(), c)
+		return
+	}
+
+	var iCommonIDDTO dto.CommonIDDTO
+	if err := config.Request(RequestOptions{Ctx: c, DTO: &iCommonIDDTO}).GetErrors(); err != nil {
+		return
+	}
+
+	iConfig, err := configService.GetConfigById(&iCommonIDDTO)
+	if err != nil {
+		utils.FailWithMessage(err.Error(), c)
+		return
+	}
+	if !canAccessConfig(loginUser, iConfig.Key) {
+		utils.PermissionFail("无权限访问", c)
+		return
+	}
+
+	utils.OkWithData(iConfig, c)
+}
+
+func (config *Config) AddOrUpdateConfig(c *gin.Context) {
+	loginUser, err := getLoginUser(c)
+	if err != nil {
+		utils.FailWithMessage(err.Error(), c)
+		return
+	}
+
+	var iConfigUpdateDTO dto.ConfigUpdateDTO
+
+	if err := config.Request(RequestOptions{Ctx: c, DTO: &iConfigUpdateDTO}).GetErrors(); err != nil {
+		return
+	}
+
+	if !canAccessConfig(loginUser, iConfigUpdateDTO.Key) {
+		utils.PermissionFail("无权限访问", c)
+		return
+	}
+	if iConfigUpdateDTO.ID != 0 {
+		currentConfig, err := configService.GetConfigById(&dto.CommonIDDTO{ID: iConfigUpdateDTO.ID})
+		if err != nil {
+			utils.FailWithMessage(err.Error(), c)
+			return
+		}
+		if !canAccessConfig(loginUser, currentConfig.Key) {
+			utils.PermissionFail("无权限访问", c)
+			return
+		}
+	}
+
+	err = configService.AddOrUpdateConfig(&iConfigUpdateDTO)
+
+	if err != nil {
+		utils.FailWithMessage(err.Error(), c)
+		return
+	}
+
+	utils.Ok(c)
+}
+
+func (config *Config) DeleteConfig(c *gin.Context) {
+	loginUser, err := getLoginUser(c)
+	if err != nil {
+		utils.FailWithMessage(err.Error(), c)
+		return
+	}
+
+	var iCommonIDDTO dto.CommonIDDTO
+	if err := config.Request(RequestOptions{Ctx: c, DTO: &iCommonIDDTO}).GetErrors(); err != nil {
+		return
+	}
+
+	currentConfig, err := configService.GetConfigById(&iCommonIDDTO)
+	if err != nil {
+		utils.FailWithMessage(err.Error(), c)
+		return
+	}
+	if !canAccessConfig(loginUser, currentConfig.Key) {
+		utils.PermissionFail("无权限访问", c)
+		return
+	}
+
+	err = configService.DeleteConfigById(&iCommonIDDTO)
+	if err != nil {
+		utils.FailWithMessage(err.Error(), c)
+		return
+	}
+	utils.OkWithMessage("删除成功!", c)
+}
+
+func isSensitiveConfigKey(key string) bool {
+	_, exists := sensitiveConfigKeys[strings.TrimSpace(key)]
+	return exists
+}
+
+func canAccessConfig(loginUser model.LoginUser, key string) bool {
+	if !isSensitiveConfigKey(key) {
+		return true
+	}
+	return loginUser.IsSuperAdmin()
+}
+
+func containsSensitiveConfigKeys(keys []string) bool {
+	for _, key := range keys {
+		if isSensitiveConfigKey(key) {
+			return true
+		}
+	}
+	return false
+}
+
+func sensitiveConfigKeyList() []string {
+	keys := make([]string, 0, len(sensitiveConfigKeys))
+	for key := range sensitiveConfigKeys {
+		keys = append(keys, key)
+	}
+	return keys
+}

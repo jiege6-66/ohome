@@ -1,0 +1,5 @@
+{
+  "apiBaseUrl": "http://iosjk.xyz:8090/api/v1",
+  "appUpdateManifestUrl": "http://192.168.5.100:12315/android.json",
+  "appUpdateUsePackageInstaller": false
+}

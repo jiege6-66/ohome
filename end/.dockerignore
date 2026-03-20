@@ -1,0 +1,8 @@
+.git
+.idea
+log
+bin
+test
+*.md
+*.log
+conf/config.yaml
