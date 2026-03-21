@@ -86,16 +86,33 @@ jobs:
           $packageDir = $extractRoot
           $scriptPath = Join-Path $packageDir "${{ matrix.start_script }}"
           $binaryPath = Join-Path $packageDir "${{ matrix.binary_name }}"
+          $scriptStdOut = Join-Path $env:RUNNER_TEMP "${{ matrix.package_dir }}-script.stdout.log"
+          $scriptStdErr = Join-Path $env:RUNNER_TEMP "${{ matrix.package_dir }}-script.stderr.log"
+          $binaryStdOut = Join-Path $env:RUNNER_TEMP "${{ matrix.package_dir }}-binary.stdout.log"
+          $binaryStdErr = Join-Path $env:RUNNER_TEMP "${{ matrix.package_dir }}-binary.stderr.log"
+          $scriptProcess = $null
+          $binaryProcess = $null
 
           $startServer = {
-            param([string]$filePath, [string]$workingDir, [int]$port)
+            param([string]$filePath, [string]$workingDir, [int]$port, [string]$stdoutPath, [string]$stderrPath)
+
+            Remove-Item $stdoutPath, $stderrPath -Force -ErrorAction SilentlyContinue
 
             if ($filePath.EndsWith(".bat")) {
-              Start-Process -FilePath "cmd.exe" -ArgumentList "/c", "set SERVER_PORT=$port && call `"$filePath`"" -WorkingDirectory $workingDir | Out-Null
-              return
+              return Start-Process -FilePath "cmd.exe" `
+                -ArgumentList "/c", "set SERVER_PORT=$port && call `"$filePath`"" `
+                -WorkingDirectory $workingDir `
+                -RedirectStandardOutput $stdoutPath `
+                -RedirectStandardError $stderrPath `
+                -PassThru
             }
 
-            Start-Process -FilePath "cmd.exe" -ArgumentList "/c", "set SERVER_PORT=$port && `"$filePath`"" -WorkingDirectory $workingDir | Out-Null
+            return Start-Process -FilePath $filePath `
+              -WorkingDirectory $workingDir `
+              -Environment @{ SERVER_PORT = "$port" } `
+              -RedirectStandardOutput $stdoutPath `
+              -RedirectStandardError $stderrPath `
+              -PassThru
           }
 
           $waitForServer = {
@@ -112,8 +129,19 @@ jobs:
             throw "Server did not become ready"
           }
 
+          $showLogs = {
+            param([string[]]$paths)
+
+            foreach ($path in $paths) {
+              if (Test-Path $path) {
+                Write-Host "--- $path"
+                Get-Content $path
+              }
+            }
+          }
+
           try {
-            & $startServer $scriptPath $packageDir ${{ matrix.script_port }}
+            $scriptProcess = & $startServer $scriptPath $packageDir ${{ matrix.script_port }} $scriptStdOut $scriptStdErr
             & $waitForServer ${{ matrix.script_port }}
 
             if (-not (Test-Path (Join-Path $packageDir "data/ohome.db"))) {
@@ -128,14 +156,22 @@ jobs:
 
             $outsideDir = Join-Path $env:RUNNER_TEMP "outside"
             New-Item -ItemType Directory -Path $outsideDir -Force | Out-Null
-            & $startServer $binaryPath $outsideDir ${{ matrix.binary_port }}
+            $binaryProcess = & $startServer $binaryPath $outsideDir ${{ matrix.binary_port }} $binaryStdOut $binaryStdErr
             & $waitForServer ${{ matrix.binary_port }}
 
             if (-not (Test-Path (Join-Path $packageDir "data/ohome.db"))) {
               throw "SQLite database file was not preserved after binary launch"
             }
+          } catch {
+            & $showLogs @($scriptStdOut, $scriptStdErr, $binaryStdOut, $binaryStdErr)
+            throw
           } finally {
             Get-Process ohome -ErrorAction SilentlyContinue | Stop-Process -Force
+            foreach ($proc in @($scriptProcess, $binaryProcess)) {
+              if ($null -ne $proc) {
+                Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+              }
+            }
           }
 
       - name: Smoke test macOS package
