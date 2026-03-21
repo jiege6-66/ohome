@@ -22,7 +22,7 @@ class LoginView extends GetView<LoginController> {
           Container(color: const Color(0xFF0F172A)),
           // Gradient Orbs
           Positioned(
-            top: -100.h,
+            top: -140.h,
             right: -50.w,
             child: Container(
               width: 300.w,
@@ -58,7 +58,7 @@ class LoginView extends GetView<LoginController> {
                   padding: EdgeInsets.only(bottom: viewInsets.bottom),
                   child: Center(
                     child: Padding(
-                      padding: EdgeInsets.only(top: 80.h, bottom: 24.h),
+                      padding: EdgeInsets.only(top: 100.h, bottom: 24.h),
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(32.r),
                         child: BackdropFilter(
@@ -254,6 +254,7 @@ class _ServerSettingsSheet extends GetView<LoginController> {
             final servers = controller.discoveredServers;
             final errorText = controller.discoveryErrorMessage.value;
             final isDiscovering = controller.isDiscovering.value;
+            final isManualEntryMode = controller.isManualEntryMode.value;
 
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -282,14 +283,75 @@ class _ServerSettingsSheet extends GetView<LoginController> {
                       ),
                     ),
                     TextButton(
-                      onPressed: isDiscovering
+                      onPressed: isManualEntryMode || isDiscovering
                           ? null
                           : controller.refreshDiscovery,
-                      child: Text(isDiscovering ? '扫描中...' : '重新扫描'),
+                      child: Text(
+                        isManualEntryMode
+                            ? '手动输入中'
+                            : (isDiscovering ? '扫描中...' : '重新扫描'),
+                      ),
                     ),
                   ],
                 ),
                 SizedBox(height: 20.h),
+                Container(
+                  width: double.infinity,
+                  padding: EdgeInsets.symmetric(
+                    horizontal: 16.w,
+                    vertical: 14.h,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.04),
+                    borderRadius: BorderRadius.circular(18.r),
+                    border: Border.all(
+                      color: isManualEntryMode
+                          ? AppThemeColors.primary.withValues(alpha: 0.6)
+                          : Colors.white12,
+                    ),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '手动输入',
+                              style: TextStyle(
+                                fontSize: 15.sp,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.white,
+                              ),
+                            ),
+                            SizedBox(height: 4.h),
+                            Text(
+                              isManualEntryMode
+                                  ? '已进入手动模式，自动搜索结果会被忽略，登录时以手动输入的地址为准。'
+                                  : '关闭后会立即开始扫描局域网，并使用扫描结果选择服务器。',
+                              style: TextStyle(
+                                fontSize: 12.sp,
+                                color: Colors.white70,
+                                height: 1.5,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      SizedBox(width: 12.w),
+                      Switch.adaptive(
+                        value: isManualEntryMode,
+                        activeThumbColor: AppThemeColors.primary,
+                        activeTrackColor: AppThemeColors.primary.withValues(
+                          alpha: 0.45,
+                        ),
+                        onChanged: controller.toggleManualEntryMode,
+                      ),
+                    ],
+                  ),
+                ),
+                SizedBox(height: 16.h),
                 if (errorText != null && errorText.isNotEmpty)
                   Padding(
                     padding: EdgeInsets.only(bottom: 12.h),
@@ -301,7 +363,7 @@ class _ServerSettingsSheet extends GetView<LoginController> {
                       ),
                     ),
                   ),
-                if (isDiscovering)
+                if (!isManualEntryMode && isDiscovering)
                   Container(
                     width: double.infinity,
                     padding: EdgeInsets.symmetric(
@@ -333,7 +395,7 @@ class _ServerSettingsSheet extends GetView<LoginController> {
                       ],
                     ),
                   ),
-                if (!isDiscovering && servers.isEmpty)
+                if (!isManualEntryMode && !isDiscovering && servers.isEmpty)
                   Container(
                     width: double.infinity,
                     padding: EdgeInsets.symmetric(
@@ -346,54 +408,62 @@ class _ServerSettingsSheet extends GetView<LoginController> {
                       border: Border.all(color: Colors.white12),
                     ),
                     child: Text(
-                      '暂未发现局域网服务，请检查网络后重试，或直接手动输入服务器地址。',
+                      '暂未发现局域网服务，请检查网络后重试，或重新打开“手动输入”后直接填写服务器地址。',
                       style: TextStyle(fontSize: 13.sp, color: Colors.white70),
                     ),
                   ),
-                if (servers.isNotEmpty)
+                if (!isManualEntryMode && servers.isNotEmpty)
                   ...servers.map(
                     (server) => Padding(
                       padding: EdgeInsets.only(bottom: 12.h),
                       child: _ServerCard(server: server),
                     ),
                   ),
-                SizedBox(height: 12.h),
-                Text(
-                  '手动地址',
-                  style: TextStyle(
-                    fontSize: 14.sp,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.white,
+                if (isManualEntryMode) ...[
+                  SizedBox(height: 4.h),
+                  Text(
+                    '手动地址',
+                    style: TextStyle(
+                      fontSize: 14.sp,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                    ),
                   ),
-                ),
-                SizedBox(height: 8.h),
-                TextField(
-                  controller: controller.apiBaseUrlController,
-                  keyboardType: TextInputType.url,
-                  decoration: InputDecoration(
-                    hintText: 'http://iosjk.xyz:18090',
-                    hintStyle: TextStyle(
-                      color: Colors.grey[600],
-                      fontSize: 16.sp,
-                    ),
-                    filled: true,
-                    fillColor: Colors.white.withValues(alpha: 0.04),
-                    contentPadding: EdgeInsets.symmetric(
-                      horizontal: 16.w,
-                      vertical: 18.h,
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(18.r),
-                      borderSide: BorderSide(color: Colors.grey.shade800),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(18.r),
-                      borderSide: const BorderSide(
-                        color: AppThemeColors.primary,
+                  SizedBox(height: 8.h),
+                  TextField(
+                    controller: controller.apiBaseUrlController,
+                    keyboardType: TextInputType.url,
+                    style: TextStyle(color: Colors.white, fontSize: 15.sp),
+                    decoration: InputDecoration(
+                      hintText: 'http://iosjk.xyz:18090',
+                      hintStyle: TextStyle(
+                        color: Colors.white38,
+                        fontSize: 15.sp,
+                      ),
+                      filled: true,
+                      fillColor: Colors.white.withValues(alpha: 0.04),
+                      contentPadding: EdgeInsets.symmetric(
+                        horizontal: 16.w,
+                        vertical: 18.h,
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(18.r),
+                        borderSide: BorderSide(color: Colors.grey.shade800),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(18.r),
+                        borderSide: const BorderSide(
+                          color: AppThemeColors.primary,
+                        ),
                       ),
                     ),
                   ),
-                ),
+                  SizedBox(height: 8.h),
+                  Text(
+                    '打开手动输入后，自动搜索结果不再生效，登录时只使用这里填写的地址。',
+                    style: TextStyle(fontSize: 12.sp, color: Colors.white54),
+                  ),
+                ],
               ],
             );
           }),

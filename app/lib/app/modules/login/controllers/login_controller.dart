@@ -23,6 +23,7 @@ class LoginController extends GetxController {
 
   final isLoading = false.obs;
   final isDiscovering = false.obs;
+  final isManualEntryMode = true.obs;
   final discoveryErrorMessage = RxnString();
   final discoveredServers = <DiscoveredServer>[].obs;
   final selectedServer = Rxn<DiscoveredServer>();
@@ -30,6 +31,7 @@ class LoginController extends GetxController {
   var _manualApiBaseUrlEdited = false;
   var _isApplyingSelection = false;
   var _hasUserSelectedServer = false;
+  var _discoveryRequestVersion = 0;
 
   @override
   void onInit() {
@@ -40,7 +42,6 @@ class LoginController extends GetxController {
     apiBaseUrlController.addListener(_handleApiBaseUrlChanged);
     nameController = TextEditingController();
     passwordController = TextEditingController();
-    Future<void>.microtask(refreshDiscovery);
   }
 
   String? validateApiBaseUrl(String? value) {
@@ -68,11 +69,31 @@ class LoginController extends GetxController {
 
   Future<void> login() async {
     autoValidateMode.value = AutovalidateMode.onUserInteraction;
-    final apiBaseUrlError = validateApiBaseUrl(apiBaseUrlController.text);
-    if (apiBaseUrlError != null) {
-      Get.snackbar('提示', apiBaseUrlError, duration: const Duration(seconds: 2));
-      return;
+    if (isManualEntryMode.value) {
+      final apiBaseUrlError = validateApiBaseUrl(apiBaseUrlController.text);
+      if (apiBaseUrlError != null) {
+        Get.snackbar(
+          '提示',
+          apiBaseUrlError,
+          duration: const Duration(seconds: 2),
+        );
+        return;
+      }
+    } else {
+      final selected = selectedServer.value;
+      if (selected == null) {
+        Get.snackbar(
+          '提示',
+          '请先选择扫描到的服务器，或打开手动输入',
+          duration: const Duration(seconds: 2),
+        );
+        return;
+      }
+      _isApplyingSelection = true;
+      apiBaseUrlController.text = selected.origin;
+      _isApplyingSelection = false;
     }
+
     if (loginFormKey.currentState!.validate()) {
       loginFormKey.currentState!.save();
       try {
@@ -96,11 +117,21 @@ class LoginController extends GetxController {
   }
 
   Future<void> refreshDiscovery() async {
+    if (isManualEntryMode.value) {
+      isDiscovering.value = false;
+      discoveryErrorMessage.value = null;
+      return;
+    }
+
+    final requestVersion = ++_discoveryRequestVersion;
     try {
       isDiscovering.value = true;
       discoveryErrorMessage.value = null;
 
       final servers = await _discoveryService.discoverServers();
+      if (_shouldIgnoreDiscoveryResult(requestVersion)) {
+        return;
+      }
       discoveredServers.assignAll(servers);
 
       final selected = selectedServer.value;
@@ -130,14 +161,43 @@ class LoginController extends GetxController {
         return;
       }
     } catch (error) {
+      if (_shouldIgnoreDiscoveryResult(requestVersion)) {
+        return;
+      }
       discoveryErrorMessage.value = error.toString();
     } finally {
-      isDiscovering.value = false;
+      if (!_shouldIgnoreDiscoveryResult(requestVersion)) {
+        isDiscovering.value = false;
+      }
     }
   }
 
   void selectDiscoveredServer(DiscoveredServer server) {
     _applySelectedServer(server, userInitiated: true);
+  }
+
+  void toggleManualEntryMode(bool enabled) {
+    if (enabled == isManualEntryMode.value) {
+      return;
+    }
+
+    isManualEntryMode.value = enabled;
+    _discoveryRequestVersion++;
+
+    if (enabled) {
+      isDiscovering.value = false;
+      discoveryErrorMessage.value = null;
+      discoveredServers.clear();
+      selectedServer.value = null;
+      _hasUserSelectedServer = false;
+      _manualApiBaseUrlEdited = true;
+      return;
+    }
+
+    _hasUserSelectedServer = false;
+    _manualApiBaseUrlEdited = false;
+    selectedServer.value = null;
+    Future<void>.microtask(refreshDiscovery);
   }
 
   bool get hasFoundServer =>
@@ -185,6 +245,11 @@ class LoginController extends GetxController {
     _manualApiBaseUrlEdited = true;
     _hasUserSelectedServer = false;
     selectedServer.value = null;
+  }
+
+  bool _shouldIgnoreDiscoveryResult(int requestVersion) {
+    return isManualEntryMode.value ||
+        requestVersion != _discoveryRequestVersion;
   }
 
   @override
