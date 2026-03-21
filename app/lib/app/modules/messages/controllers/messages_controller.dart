@@ -25,87 +25,141 @@ class MessagesController extends GetxController {
                : null);
 
   static const int _pageSize = 20;
+  static const List<String> tabSources = <String>[
+    '',
+    'drops',
+    'quark',
+    'system',
+  ];
 
   final AppMessageApi _appMessageApi;
   final AppMessagePushService? _appMessagePushService;
 
-  final scrollController = ScrollController();
-  final messages = <AppMessageModel>[].obs;
-  final loading = false.obs;
-  final loadingMore = false.obs;
-  final hasMore = true.obs;
+  final scrollControllers = List<ScrollController>.generate(
+    tabSources.length,
+    (_) => ScrollController(),
+  );
+  final tabMessages = List<RxList<AppMessageModel>>.generate(
+    tabSources.length,
+    (_) => <AppMessageModel>[].obs,
+  );
+  final tabLoading = List<RxBool>.generate(tabSources.length, (_) => false.obs);
+  final tabLoadingMore = List<RxBool>.generate(
+    tabSources.length,
+    (_) => false.obs,
+  );
+  final tabHasMore = List<RxBool>.generate(tabSources.length, (_) => true.obs);
   final unreadOnly = false.obs;
   final unreadCount = 0.obs;
-  final sourceFilter = ''.obs;
+  final sourceFilter = tabSources.first.obs;
+  final selectedTabIndex = 0.obs;
   final deletingMessageIds = <int>{}.obs;
 
-  int _page = 1;
-  int _token = 0;
+  final List<int> _pages = List<int>.filled(tabSources.length, 1);
+  final List<int> _tokens = List<int>.filled(tabSources.length, 0);
+  final List<bool> _hasLoaded = List<bool>.filled(tabSources.length, false);
+
   bool _pendingPushSync = false;
   bool _syncingFromPush = false;
   StreamSubscription<AppMessagePushEvent>? _pushSubscription;
   Timer? _pushSyncTimer;
 
+  int get tabCount => tabSources.length;
+
+  List<String> get tabLabels =>
+      tabSources.map(sourceFilterLabel).toList(growable: false);
+
   @override
   void onInit() {
     super.onInit();
-    scrollController.addListener(_handleScroll);
+    for (var index = 0; index < scrollControllers.length; index++) {
+      final tabIndex = index;
+      scrollControllers[index].addListener(() => _handleScroll(tabIndex));
+    }
     _pushSubscription = _appMessagePushService?.events.listen(_handlePushEvent);
-    loadMessages(refresh: true);
+    loadMessages(refresh: true, tabIndex: selectedTabIndex.value);
   }
 
   @override
   void onClose() {
     _pushSubscription?.cancel();
     _pushSyncTimer?.cancel();
-    scrollController.dispose();
+    for (final controller in scrollControllers) {
+      controller.dispose();
+    }
     super.onClose();
+  }
+
+  Future<void> ensureTabLoaded(int tabIndex) async {
+    if (_hasLoaded[tabIndex] || tabLoading[tabIndex].value) {
+      return;
+    }
+    await loadMessages(refresh: true, tabIndex: tabIndex);
   }
 
   Future<void> loadMessages({
     required bool refresh,
+    int? tabIndex,
     bool showErrorToast = true,
   }) async {
+    final index = tabIndex ?? selectedTabIndex.value;
+    if (index < 0 || index >= tabCount) {
+      return;
+    }
+
     late final int token;
+    final loading = tabLoading[index];
+    final loadingMore = tabLoadingMore[index];
+    final hasMore = tabHasMore[index];
+    final records = tabMessages[index];
+
     if (refresh) {
-      token = ++_token;
-      _page = 1;
+      token = ++_tokens[index];
+      _pages[index] = 1;
       hasMore.value = true;
       loading.value = true;
       loadingMore.value = false;
     } else {
-      if (loading.value || loadingMore.value || !hasMore.value) return;
-      token = _token;
+      if (loading.value || loadingMore.value || !hasMore.value) {
+        return;
+      }
+      token = _tokens[index];
       loadingMore.value = true;
     }
 
     try {
+      final source = tabSources[index];
       final result = await _appMessageApi.getMessageList(
-        source: sourceFilter.value.isEmpty ? null : sourceFilter.value,
+        source: source.isEmpty ? null : source,
         readOnly: unreadOnly.value ? false : null,
-        page: _page,
+        page: _pages[index],
         limit: _pageSize,
         showErrorToast: showErrorToast,
       );
-      if (token != _token) return;
+      if (token != _tokens[index]) {
+        return;
+      }
+
       unreadCount.value = result.unreadCount;
       if (refresh) {
-        messages.assignAll(result.records);
+        records.assignAll(result.records);
       } else {
-        messages.addAll(result.records);
+        records.addAll(result.records);
       }
-      hasMore.value = messages.length < result.total;
+
+      hasMore.value = records.length < result.total;
       if (hasMore.value) {
-        _page += 1;
+        _pages[index] += 1;
       }
+      _hasLoaded[index] = true;
     } finally {
-      if (token == _token) {
+      if (token == _tokens[index]) {
         if (refresh) {
           loading.value = false;
         } else {
           loadingMore.value = false;
         }
-        if (_pendingPushSync && !loading.value && !loadingMore.value) {
+        if (_pendingPushSync && !_isCurrentTabBusy()) {
           _schedulePushSync();
         }
       }
@@ -115,19 +169,35 @@ class MessagesController extends GetxController {
   void toggleUnreadOnly(bool value) {
     if (unreadOnly.value == value) return;
     unreadOnly.value = value;
-    loadMessages(refresh: true);
+    _invalidateTabs(clearData: true);
+    loadMessages(refresh: true, tabIndex: selectedTabIndex.value);
   }
 
   void changeSourceFilter(String value) {
-    final normalized = value.trim().toLowerCase();
-    if (sourceFilter.value == normalized) return;
-    sourceFilter.value = normalized;
-    loadMessages(refresh: true);
+    changeTab(indexOfSource(value));
+  }
+
+  void changeTab(int index) {
+    if (index < 0 || index >= tabCount) {
+      return;
+    }
+    selectedTabIndex.value = index;
+    sourceFilter.value = tabSources[index];
+    if (!_hasLoaded[index]) {
+      unawaited(loadMessages(refresh: true, tabIndex: index));
+    }
+  }
+
+  int indexOfSource(String source) {
+    final normalized = source.trim().toLowerCase();
+    final index = tabSources.indexOf(normalized);
+    return index >= 0 ? index : 0;
   }
 
   Future<void> markAllRead() async {
     await _appMessageApi.markAllMessagesRead();
-    await loadMessages(refresh: true);
+    _invalidateTabs(clearData: true);
+    await loadMessages(refresh: true, tabIndex: selectedTabIndex.value);
     _refreshDropsOverviewIfNeeded();
     Get.snackbar('提示', '消息已全部标记为已读');
   }
@@ -161,7 +231,8 @@ class MessagesController extends GetxController {
     deletingMessageIds.add(id);
     try {
       await _appMessageApi.deleteMessage(id);
-      await loadMessages(refresh: true);
+      _invalidateTabs(clearData: true);
+      await loadMessages(refresh: true, tabIndex: selectedTabIndex.value);
       _refreshDropsOverviewIfNeeded();
       Get.snackbar('提示', '消息已删除');
     } catch (_) {
@@ -191,9 +262,21 @@ class MessagesController extends GetxController {
       await Get.toNamed(Routes.QUARK_TRANSFER_TASKS);
     }
 
-    await loadMessages(refresh: true);
+    _invalidateTabs(clearData: true);
+    await loadMessages(refresh: true, tabIndex: selectedTabIndex.value);
     _refreshDropsOverviewIfNeeded();
   }
+
+  RxList<AppMessageModel> messagesOf(int tabIndex) => tabMessages[tabIndex];
+
+  RxBool loadingOf(int tabIndex) => tabLoading[tabIndex];
+
+  RxBool loadingMoreOf(int tabIndex) => tabLoadingMore[tabIndex];
+
+  RxBool hasMoreOf(int tabIndex) => tabHasMore[tabIndex];
+
+  ScrollController scrollControllerOf(int tabIndex) =>
+      scrollControllers[tabIndex];
 
   String sourceLabelOf(AppMessageModel message) {
     return sourceLabel(message.source);
@@ -244,8 +327,8 @@ class MessagesController extends GetxController {
     }
   }
 
-  String get emptyStateText {
-    switch (sourceFilter.value) {
+  String emptyStateTextOf(int tabIndex) {
+    switch (tabSources[tabIndex]) {
       case 'drops':
         return '暂无点滴消息';
       case 'quark':
@@ -268,11 +351,13 @@ class MessagesController extends GetxController {
     return _translateDropsSummary(summary);
   }
 
-  void _handleScroll() {
-    if (!scrollController.hasClients) return;
-    final position = scrollController.position;
+  void _handleScroll(int tabIndex) {
+    if (selectedTabIndex.value != tabIndex) return;
+    final controller = scrollControllers[tabIndex];
+    if (!controller.hasClients) return;
+    final position = controller.position;
     if (position.maxScrollExtent - position.pixels < 200) {
-      loadMessages(refresh: false);
+      loadMessages(refresh: false, tabIndex: tabIndex);
     }
   }
 
@@ -294,39 +379,69 @@ class MessagesController extends GetxController {
   }
 
   Future<void> _syncMessagesFromPush() async {
-    if (_syncingFromPush || loading.value || loadingMore.value) {
+    if (_syncingFromPush || _isCurrentTabBusy()) {
       _pendingPushSync = true;
       return;
     }
 
     _pendingPushSync = false;
     _syncingFromPush = true;
-    final token = ++_token;
-    final currentLimit = messages.length > _pageSize
-        ? messages.length
+    final index = selectedTabIndex.value;
+    final token = ++_tokens[index];
+    final records = tabMessages[index];
+    final currentLimit = records.length > _pageSize
+        ? records.length
         : _pageSize;
 
     try {
+      final source = tabSources[index];
       final result = await _appMessageApi.getMessageList(
-        source: sourceFilter.value.isEmpty ? null : sourceFilter.value,
+        source: source.isEmpty ? null : source,
         readOnly: unreadOnly.value ? false : null,
         page: 1,
         limit: currentLimit,
         showErrorToast: false,
       );
-      if (token != _token) return;
+      if (token != _tokens[index]) return;
 
       unreadCount.value = result.unreadCount;
-      messages.assignAll(result.records);
-      hasMore.value = messages.length < result.total;
-      final loadedPages = (messages.length / _pageSize).ceil();
-      _page = loadedPages + 1;
+      records.assignAll(result.records);
+      tabHasMore[index].value = records.length < result.total;
+      final loadedPages = (records.length / _pageSize).ceil();
+      _pages[index] = loadedPages + 1;
+      _hasLoaded[index] = true;
+
+      for (var tabIndex = 0; tabIndex < tabCount; tabIndex++) {
+        if (tabIndex == index) continue;
+        _hasLoaded[tabIndex] = false;
+        tabMessages[tabIndex].clear();
+        tabHasMore[tabIndex].value = true;
+      }
     } finally {
-      if (token == _token) {
+      if (token == _tokens[index]) {
         _syncingFromPush = false;
         if (_pendingPushSync) {
           _schedulePushSync();
         }
+      }
+    }
+  }
+
+  bool _isCurrentTabBusy() {
+    final index = selectedTabIndex.value;
+    return tabLoading[index].value || tabLoadingMore[index].value;
+  }
+
+  void _invalidateTabs({required bool clearData}) {
+    for (var index = 0; index < tabCount; index++) {
+      _tokens[index] += 1;
+      _pages[index] = 1;
+      _hasLoaded[index] = false;
+      tabLoading[index].value = false;
+      tabLoadingMore[index].value = false;
+      tabHasMore[index].value = true;
+      if (clearData) {
+        tabMessages[index].clear();
       }
     }
   }

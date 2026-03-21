@@ -152,7 +152,12 @@ func (s *DropsEventService) AddOrUpdate(updateDTO *dto.DropsEventUpsertDTO, logi
 	if err := global.DB.Save(&event).Error; err != nil {
 		return model.DropsEvent{}, err
 	}
-	return s.GetByID(event.ID, loginUser, loc)
+	savedEvent, err := s.GetByID(event.ID, loginUser, loc)
+	if err != nil {
+		return model.DropsEvent{}, err
+	}
+	TriggerDropsReminderRescan(loc)
+	return savedEvent, nil
 }
 
 func (s *DropsEventService) Delete(id uint, loginUser model.LoginUser, loc *time.Location) error {

@@ -186,7 +186,12 @@ func (s *DropsItemService) Create(loginUser model.LoginUser, updateDTO *dto.Drop
 	if createErr = tx.Commit().Error; createErr != nil {
 		return model.DropsItem{}, createErr
 	}
-	return s.GetByID(normalized.ID, loginUser)
+	created, err := s.GetByID(normalized.ID, loginUser)
+	if err != nil {
+		return model.DropsItem{}, err
+	}
+	TriggerDropsReminderRescan(loc)
+	return created, nil
 }
 
 func (s *DropsItemService) Update(id uint, loginUser model.LoginUser, updateDTO *dto.DropsItemUpsertDTO, loc *time.Location) (model.DropsItem, error) {
@@ -238,7 +243,12 @@ func (s *DropsItemService) Update(id uint, loginUser model.LoginUser, updateDTO 
 	if updateErr = tx.Commit().Error; updateErr != nil {
 		return model.DropsItem{}, updateErr
 	}
-	return s.GetByID(item.ID, loginUser)
+	updatedItem, err := s.GetByID(item.ID, loginUser)
+	if err != nil {
+		return model.DropsItem{}, err
+	}
+	TriggerDropsReminderRescan(loc)
+	return updatedItem, nil
 }
 
 func (s *DropsItemService) AddPhotos(itemID uint, loginUser model.LoginUser, files []*multipart.FileHeader) (model.DropsItem, error) {
