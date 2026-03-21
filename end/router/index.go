@@ -59,7 +59,7 @@ func InitRouter() {
 	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	// 获取端口号
-	port := viper.GetString("server.port")
+	port := strings.TrimSpace(viper.GetString("server.port"))
 	if port == "" {
 		port = "8999"
 	}

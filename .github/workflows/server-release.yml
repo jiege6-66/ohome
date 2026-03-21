@@ -100,16 +100,16 @@ jobs:
 
             if ($filePath.EndsWith(".bat")) {
               return Start-Process -FilePath "cmd.exe" `
-                -ArgumentList "/c", "set SERVER_PORT=$port && call `"$filePath`"" `
+                -ArgumentList "/d", "/s", "/c", "set `"SERVER_PORT=$port`" && set `"GIN_MODE=release`" && call `"$filePath`"" `
                 -WorkingDirectory $workingDir `
                 -RedirectStandardOutput $stdoutPath `
                 -RedirectStandardError $stderrPath `
                 -PassThru
             }
 
-            return Start-Process -FilePath $filePath `
+            return Start-Process -FilePath "cmd.exe" `
+              -ArgumentList "/d", "/s", "/c", "set `"SERVER_PORT=$port`" && set `"GIN_MODE=release`" && `"$filePath`"" `
               -WorkingDirectory $workingDir `
-              -Environment @{ SERVER_PORT = "$port" } `
               -RedirectStandardOutput $stdoutPath `
               -RedirectStandardError $stderrPath `
               -PassThru
