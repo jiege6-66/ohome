@@ -174,6 +174,20 @@ class _PlayerViewState extends State<PlayerView> with WidgetsBindingObserver {
 
     items.addAll([
       _buildActionIcon(
+        enabled: controller.canCastCurrentEpisode,
+        icon: controller.isCasting ? Icons.cast_connected : Icons.cast,
+        onTap: () => unawaited(controller.castCurrentEpisode()),
+      ),
+      SizedBox(width: 8.w),
+      if (controller.isCasting) ...[
+        _buildActionIcon(
+          enabled: true,
+          icon: Icons.stop_screen_share_outlined,
+          onTap: () => unawaited(controller.stopCasting()),
+        ),
+        SizedBox(width: 8.w),
+      ],
+      _buildActionIcon(
         enabled: true,
         icon: Icons.format_list_bulleted,
         onTap: () => _showEpisodeSheet(state.context, compact: true),
@@ -688,6 +702,27 @@ class _PlayerViewState extends State<PlayerView> with WidgetsBindingObserver {
                   ),
                 ),
               ),
+            );
+          }),
+          SizedBox(width: 8.w),
+          Obx(() {
+            return _buildActionIcon(
+              enabled: controller.canCastCurrentEpisode,
+              icon: controller.isCasting ? Icons.cast_connected : Icons.cast,
+              onTap: () => unawaited(controller.castCurrentEpisode()),
+            );
+          }),
+          Obx(() {
+            if (!controller.isCasting) return const SizedBox.shrink();
+            return Row(
+              children: [
+                SizedBox(width: 8.w),
+                _buildActionIcon(
+                  enabled: true,
+                  icon: Icons.stop_screen_share_outlined,
+                  onTap: () => unawaited(controller.stopCasting()),
+                ),
+              ],
             );
           }),
           SizedBox(width: 8.w),

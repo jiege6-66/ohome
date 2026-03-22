@@ -20,6 +20,7 @@ abstract class Routes {
   static const TV = _Paths.TV;
   static const PLAYLET = _Paths.PLAYLET;
   static const PLAYLET_PLAYER = _Paths.PLAYLET_PLAYER;
+  static const VIDEO_CAST = _Paths.VIDEO_CAST;
   static const MUSIC = _Paths.MUSIC;
   static const PLAYER = _Paths.PLAYER;
   static const MUSIC_PLAYER = _Paths.MUSIC_PLAYER;
@@ -45,6 +46,7 @@ abstract class _Paths {
   static const TV = '/tv';
   static const PLAYLET = '/playlet';
   static const PLAYLET_PLAYER = '/playlet-player';
+  static const VIDEO_CAST = '/video-cast';
   static const MUSIC = '/music';
   static const PLAYER = '/player';
   static const MUSIC_PLAYER = '/music-player';

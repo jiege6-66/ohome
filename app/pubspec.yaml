@@ -33,6 +33,7 @@ dependencies:
   multicast_dns: ^0.3.3
   flutter_inappwebview: ^6.1.5
   web_socket_channel: ^3.0.3
+  dlna_dart: ^0.1.0
 
 dev_dependencies:
   flutter_lints: ^6.0.0

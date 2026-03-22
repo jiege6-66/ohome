@@ -44,6 +44,7 @@ import '../modules/playlet/bindings/playlet_binding.dart';
 import '../modules/playlet/views/playlet_view.dart';
 import '../modules/playlet_player/bindings/playlet_player_binding.dart';
 import '../modules/playlet_player/views/playlet_player_view.dart';
+import '../modules/video_cast/views/video_cast_view.dart';
 
 part 'app_routes.dart';
 
@@ -142,6 +143,11 @@ class AppPages {
       name: _Paths.PLAYLET_PLAYER,
       page: () => const PlayletPlayerView(),
       binding: PlayletPlayerBinding(),
+      middlewares: [AuthMiddleware()],
+    ),
+    GetPage(
+      name: _Paths.VIDEO_CAST,
+      page: () => const VideoCastView(),
       middlewares: [AuthMiddleware()],
     ),
     GetPage(

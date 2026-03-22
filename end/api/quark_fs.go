@@ -13,6 +13,7 @@ import (
 	"ohome/utils"
 	"path"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -65,6 +66,7 @@ func (a *QuarkFs) StreamQuarkFile(c *gin.Context) {
 	}
 
 	isDownload := c.Query("download") == "true"
+	isCast := c.Query("cast") == "true"
 	rangeHeader := c.GetHeader("Range")
 	if c.Request.Method == http.MethodHead {
 		meta, err := quarkFsService.DescribeFile(&pathDTO)
@@ -77,7 +79,7 @@ func (a *QuarkFs) StreamQuarkFile(c *gin.Context) {
 			c.Status(http.StatusRequestedRangeNotSatisfiable)
 			return
 		}
-		a.writeProxyHeaders(c, meta, responseMeta, isDownload, "")
+		a.writeProxyHeaders(c, meta, responseMeta, isDownload, isCast, "")
 		c.Status(responseMeta.StatusCode)
 		return
 	}
@@ -89,16 +91,22 @@ func (a *QuarkFs) StreamQuarkFile(c *gin.Context) {
 	}
 	defer result.Body.Close()
 
-	a.writeStreamResponse(c, result, meta, isDownload)
+	a.writeStreamResponse(c, result, meta, isDownload, isCast)
 }
 
-func (a *QuarkFs) writeStreamResponse(c *gin.Context, result *service.QuarkStreamResult, meta service.QuarkProxyMeta, attachment bool) {
+func (a *QuarkFs) writeStreamResponse(
+	c *gin.Context,
+	result *service.QuarkStreamResult,
+	meta service.QuarkProxyMeta,
+	attachment bool,
+	cast bool,
+) {
 	responseMeta := service.QuarkProxyResponseMeta{
 		ContentLength: result.ContentLength,
 		StatusCode:    result.StatusCode,
 		ContentRange:  result.ContentRange,
 	}
-	a.writeProxyHeaders(c, meta, responseMeta, attachment, result.ContentType)
+	a.writeProxyHeaders(c, meta, responseMeta, attachment, cast, result.ContentType)
 	c.Status(result.StatusCode)
 	c.Writer.Flush() // 立即发送响应头，让播放器尽快获取文件信息
 	_, _ = io.Copy(c.Writer, result.Body)
@@ -109,6 +117,7 @@ func (a *QuarkFs) writeProxyHeaders(
 	meta service.QuarkProxyMeta,
 	responseMeta service.QuarkProxyResponseMeta,
 	attachment bool,
+	cast bool,
 	contentType string,
 ) {
 	if contentType == "" {
@@ -119,6 +128,10 @@ func (a *QuarkFs) writeProxyHeaders(
 	}
 	c.Header("Content-Type", contentType)
 	c.Header("Accept-Ranges", "bytes")
+	if cast && !attachment {
+		c.Header("transferMode.dlna.org", "Streaming")
+		c.Header("contentFeatures.dlna.org", buildDLNAContentFeatures(contentType))
+	}
 
 	if responseMeta.ContentRange != "" {
 		c.Header("Content-Range", responseMeta.ContentRange)
@@ -142,6 +155,14 @@ func (a *QuarkFs) writeProxyHeaders(
 	} else if meta.Filename != "" {
 		c.Header("Content-Disposition", disposition+`; filename="`+meta.Filename+`"`)
 	}
+}
+
+func buildDLNAContentFeatures(contentType string) string {
+	contentType = strings.TrimSpace(contentType)
+	if contentType == "" {
+		contentType = "application/octet-stream"
+	}
+	return contentType + ":DLNA.ORG_OP=01;DLNA.ORG_CI=0;DLNA.ORG_FLAGS=01700000000000000000000000000000"
 }
 
 func buildQuarkProxyETag(meta service.QuarkProxyMeta) string {

@@ -580,32 +580,62 @@ class _PlayletPlayerViewState extends State<PlayletPlayerView>
             child: Align(
               alignment: Alignment.topLeft,
               child: Row(
-                mainAxisSize: MainAxisSize.min,
                 children: [
                   IconButton(
                     onPressed: () => Navigator.of(context).maybePop(),
                     icon: const Icon(Icons.arrow_back, color: Colors.white),
                   ),
                   SizedBox(width: 4.w),
-                  ConstrainedBox(
-                    constraints: BoxConstraints(maxWidth: 220.w),
-                    child: Padding(
-                      padding: EdgeInsets.symmetric(vertical: 8.h),
-                      child: Obx(
-                        () => Text(
-                          _title(),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          textAlign: TextAlign.left,
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 17.sp,
-                            fontWeight: FontWeight.w700,
+                  Expanded(
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(maxWidth: 220.w),
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(vertical: 8.h),
+                        child: Obx(
+                          () => Text(
+                            _title(),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.left,
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 17.sp,
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
                         ),
                       ),
                     ),
                   ),
+                  Obx(
+                    () => IconButton(
+                      tooltip: '投屏',
+                      onPressed: controller.canCastCurrentEpisode
+                          ? () => unawaited(controller.castCurrentEpisode())
+                          : null,
+                      icon: Icon(
+                        controller.isCasting
+                            ? Icons.cast_connected
+                            : controller.canCastCurrentEpisode
+                            ? Icons.cast
+                            : Icons.cast_outlined,
+                        color: controller.canCastCurrentEpisode
+                            ? Colors.white
+                            : Colors.white38,
+                      ),
+                    ),
+                  ),
+                  Obx(() {
+                    if (!controller.isCasting) return const SizedBox.shrink();
+                    return IconButton(
+                      tooltip: '结束投屏',
+                      onPressed: () => unawaited(controller.stopCasting()),
+                      icon: const Icon(
+                        Icons.stop_screen_share_outlined,
+                        color: Colors.white,
+                      ),
+                    );
+                  }),
                 ],
               ),
             ),

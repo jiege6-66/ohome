@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
@@ -8,10 +9,12 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 import '../../../data/api/quark.dart';
 import '../../../data/models/quark_file_entry.dart';
 import '../../../services/playback_entry_service.dart';
+import '../../../services/video_cast_service.dart';
 import '../../../utils/app_env.dart';
 import '../../../utils/media_path.dart';
 import '../../../data/storage/playback_progress_storage.dart';
 import '../../../data/storage/skip_settings_storage.dart';
+import '../../video_cast/views/video_cast_view.dart';
 import '../../music_player/controllers/music_player_controller.dart';
 
 enum _InitialEpisodeSource { none, preferred, explicitResume, storedResume }
@@ -45,6 +48,7 @@ class PlayerController extends GetxController {
   final String _defaultApplicationType;
   final SkipSettingsStorage _skipStorage;
   final WebdavApi _webdavApi = Get.find<WebdavApi>();
+  final VideoCastService _castService = Get.find<VideoCastService>();
   final RxDouble videoAspectRatio = (16 / 9).obs;
   final RxBool isPortraitVideo = false.obs;
   final Rxn<Duration> scrubPreview = Rxn<Duration>();
@@ -92,8 +96,47 @@ class PlayerController extends GetxController {
   bool _outroSkipTriggered = false;
   int _routeArgsVersion = 0;
   bool _blockPlaybackOnOpen = false;
+  Timer? _castProgressTimer;
+  Duration? _lastCastPersistedPosition;
 
   bool get isPlayletMode => _applicationType.trim().toLowerCase() == 'playlet';
+  bool get isCasting => _castService.isCasting.value;
+  String get castingDeviceName => _castService.currentDeviceName.value.trim();
+
+  bool get canCastCurrentEpisode => currentCastUrl != null;
+
+  String? get currentCastUrl {
+    final current = _currentEpisode;
+    if (current == null) return null;
+    final direct = current.url?.trim();
+    if (direct != null && direct.isNotEmpty) return direct;
+    final path = current.path?.trim();
+    if (path == null || path.isEmpty) return null;
+    final streamUrl = _buildStreamUrl(path);
+    if (streamUrl == null || streamUrl.isEmpty) return null;
+    final uri = Uri.parse(streamUrl);
+    return uri
+        .replace(
+          queryParameters: <String, String>{
+            ...uri.queryParameters,
+            'cast': 'true',
+          },
+        )
+        .toString();
+  }
+
+  String get currentCastSourcePath => _currentEpisode?.path?.trim() ?? '';
+
+  String get currentCastTitle {
+    final current = _currentEpisode;
+    final title = current?.title.trim() ?? '';
+    if (title.isNotEmpty) return title;
+    final subTitle = current?.subTitle.trim() ?? '';
+    if (subTitle.isNotEmpty) return subTitle;
+    final resource = resourceTitle.value.trim();
+    if (resource.isNotEmpty) return resource;
+    return '当前视频';
+  }
 
   Episode? get _currentEpisode {
     final index = currentIndex.value;
@@ -143,6 +186,10 @@ class PlayerController extends GetxController {
 
   Future<void> _startInitialPlayback() async {
     await _configurePlayerIfNeeded();
+    if (isCasting) {
+      await stopPlayback();
+      return;
+    }
     if (episodes.isNotEmpty && !_blockPlaybackOnOpen) {
       await playAt(_initialIndex);
     }
@@ -291,6 +338,75 @@ class PlayerController extends GetxController {
   Future<void> playNextEpisode() => playAt(currentIndex.value + 1);
 
   Future<void> playPreviousEpisode() => playAt(currentIndex.value - 1);
+
+  Future<void> castCurrentEpisode() async {
+    final url = currentCastUrl;
+    if (url == null || url.isEmpty) {
+      Get.snackbar('提示', '当前视频没有可投屏地址');
+      return;
+    }
+    final result = await Get.bottomSheet<bool>(
+      VideoCastView(
+        url: url,
+        title: currentCastTitle,
+        sourcePath: currentCastSourcePath,
+        asBottomSheet: true,
+        onCastStarted: _enterCastingLocalStandby,
+      ),
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black54,
+    );
+    if (result == true) return;
+  }
+
+  Future<void> stopCasting() async {
+    await _persistCastProgressSnapshot();
+    final wasCasting = isCasting;
+    await _castService.stopCasting();
+    _stopCastProgressPolling();
+    if (!wasCasting) return;
+    await _restoreLocalPlaybackAfterCasting();
+  }
+
+  Future<void> _enterCastingLocalStandby() async {
+    await stopSpeedBoost();
+    _lastCastPersistedPosition = null;
+    _startCastProgressPolling();
+    try {
+      await player.pause();
+    } catch (_) {}
+    await stopPlayback();
+  }
+
+  Future<void> _restoreLocalPlaybackAfterCasting() async {
+    final episode = _currentEpisode;
+    if (episode == null) return;
+    await _ensureSkipSettingsLoaded();
+
+    final url = _episodeUrl(episode);
+    if (url == null || url.isEmpty) return;
+
+    final episodePath = episode.path?.trim();
+    final intro = skipIntro.value;
+
+    try {
+      _openingEpisodePath = episodePath;
+      _openingEpisodeUrl = url;
+      await player.stop();
+      _currentEpisodePath = episodePath;
+      _currentEpisodeUrl = url;
+      _lastPersistedPosition = null;
+      _outroSkipTriggered = false;
+      _pendingSeek = intro > Duration.zero ? intro : null;
+      await player.open(Media(url), play: false);
+    } catch (_) {
+      Get.snackbar('播放失败', '当前视频恢复失败，请重试');
+    } finally {
+      _openingEpisodePath = null;
+      _openingEpisodeUrl = null;
+    }
+  }
 
   Future<void> setPlaybackRate(double rate) async {
     if (rate <= 0) return;
@@ -457,8 +573,31 @@ class PlayerController extends GetxController {
       Get.snackbar('提示', '登录已过期，请重新登录');
       return;
     }
-
     final episodePath = episode.path?.trim();
+
+    if (isCasting) {
+      final castUrl = _castUrlForEpisode(episode);
+      if (castUrl == null || castUrl.isEmpty) {
+        Get.snackbar('提示', '当前视频没有可投屏地址');
+        return;
+      }
+      final switched = await _castService.castToCurrentDevice(
+        url: castUrl,
+        title: _castTitleForEpisode(episode),
+        sourcePath: episodePath ?? '',
+      );
+      if (!switched) {
+        Get.snackbar('投屏失败', '当前设备没有接受切换请求');
+        return;
+      }
+      _lastCastPersistedPosition = null;
+      await stopPlayback();
+      _currentEpisodePath = episodePath;
+      _currentEpisodeUrl = url;
+      currentIndex.value = index;
+      return;
+    }
+
     Duration? resume;
     if (!clearResume &&
         _resumeEpisodePath != null &&
@@ -516,6 +655,34 @@ class PlayerController extends GetxController {
     final path = episode.path?.trim();
     if (path == null || path.isEmpty) return null;
     return _buildStreamUrl(path);
+  }
+
+  String? _castUrlForEpisode(Episode episode) {
+    final direct = episode.url?.trim();
+    if (direct != null && direct.isNotEmpty) return direct;
+    final path = episode.path?.trim();
+    if (path == null || path.isEmpty) return null;
+    final streamUrl = _buildStreamUrl(path);
+    if (streamUrl == null || streamUrl.isEmpty) return null;
+    final uri = Uri.parse(streamUrl);
+    return uri
+        .replace(
+          queryParameters: <String, String>{
+            ...uri.queryParameters,
+            'cast': 'true',
+          },
+        )
+        .toString();
+  }
+
+  String _castTitleForEpisode(Episode episode) {
+    final title = episode.title.trim();
+    if (title.isNotEmpty) return title;
+    final subTitle = episode.subTitle.trim();
+    if (subTitle.isNotEmpty) return subTitle;
+    final resource = resourceTitle.value.trim();
+    if (resource.isNotEmpty) return resource;
+    return '当前视频';
   }
 
   void _applyArgs(dynamic args) {
@@ -973,6 +1140,47 @@ class PlayerController extends GetxController {
     );
   }
 
+  void _startCastProgressPolling() {
+    _castProgressTimer?.cancel();
+    _castProgressTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+      unawaited(_persistCastProgressSnapshot());
+    });
+  }
+
+  void _stopCastProgressPolling() {
+    _castProgressTimer?.cancel();
+    _castProgressTimer = null;
+  }
+
+  Future<void> _persistCastProgressSnapshot() async {
+    if (!isCasting) return;
+    final folder = _folderPath;
+    final episodePath = _currentEpisodePath;
+    if (folder == null || folder.isEmpty) return;
+    if (episodePath == null || episodePath.isEmpty) return;
+
+    final position = await _castService.currentPosition();
+    if (position == null || position < Duration.zero) return;
+
+    final last = _lastCastPersistedPosition;
+    if (last != null && (position - last).abs() < const Duration(seconds: 5)) {
+      return;
+    }
+    _lastCastPersistedPosition = position;
+
+    final currentEpisode = _currentEpisode;
+    final currentTitle = (currentEpisode?.title ?? '').trim();
+    final title = currentTitle.isNotEmpty
+        ? currentTitle
+        : _titleFromPath(episodePath);
+    await _progressStorage.saveProgress(
+      folderPath: folder,
+      itemTitle: title,
+      itemPath: episodePath,
+      position: position,
+    );
+  }
+
   String? _buildStreamUrl(String path, {String? applicationType}) {
     final base = Uri.parse(AppEnv.instance.apiBaseUrl);
     final streamPath = _joinPath(
@@ -1031,6 +1239,7 @@ class PlayerController extends GetxController {
     _heightSubscription?.cancel();
     _videoParamsSubscription?.cancel();
     _scrubTimer?.cancel();
+    _castProgressTimer?.cancel();
     player.dispose();
     unawaited(WakelockPlus.disable());
     super.onClose();
