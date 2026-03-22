@@ -19,6 +19,8 @@ import '../../music_player/controllers/music_player_controller.dart';
 
 enum _InitialEpisodeSource { none, preferred, explicitResume, storedResume }
 
+enum FullscreenFitMode { contain, cover }
+
 class PlayerController extends GetxController {
   PlayerController({
     PlaybackProgressStorage? progressStorage,
@@ -60,7 +62,7 @@ class PlayerController extends GetxController {
   final RxBool isControlsLocked = false.obs;
   final Rx<Duration> skipIntro = Duration.zero.obs;
   final Rx<Duration> skipOutro = Duration.zero.obs;
-  final RxBool isFullscreenCover = false.obs;
+  final Rx<FullscreenFitMode> fullscreenFitMode = FullscreenFitMode.cover.obs;
   final RxBool isLoadingPlaylist = false.obs;
 
   bool _autoNextRunning = false;
@@ -444,8 +446,18 @@ class PlayerController extends GetxController {
     }
   }
 
+  bool get isFullscreenCover =>
+      fullscreenFitMode.value == FullscreenFitMode.cover;
+
+  void setFullscreenFitMode(FullscreenFitMode mode) {
+    if (fullscreenFitMode.value == mode) return;
+    fullscreenFitMode.value = mode;
+  }
+
   void toggleFullscreenFitMode() {
-    isFullscreenCover.value = !isFullscreenCover.value;
+    setFullscreenFitMode(
+      isFullscreenCover ? FullscreenFitMode.contain : FullscreenFitMode.cover,
+    );
   }
 
   Future<void> setSkipIntro(Duration intro) async {

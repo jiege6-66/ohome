@@ -170,6 +170,8 @@ class _PlayerViewState extends State<PlayerView> with WidgetsBindingObserver {
     );
 
     items.add(SizedBox(width: 8.w));
+    items.add(_buildFullscreenFitModeToggle(state));
+    items.add(SizedBox(width: 8.w));
 
     if (!hasEpisodes) return items;
 
@@ -615,6 +617,40 @@ class _PlayerViewState extends State<PlayerView> with WidgetsBindingObserver {
     );
   }
 
+  Widget _buildFullscreenFitModeToggle(VideoState state) {
+    return Obx(() {
+      final isCover = controller.isFullscreenCover;
+      final nextMode = isCover ? '完整显示' : '铺满裁切';
+      final icon = isCover ? Icons.fit_screen : Icons.crop_free;
+      return Semantics(
+        button: true,
+        label: '画面模式，点击切换到$nextMode',
+        child: Tooltip(
+          message: nextMode,
+          child: Material(
+            color: Colors.black38,
+            borderRadius: BorderRadius.circular(24.r),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(24.r),
+              onTap: () {
+                controller.toggleFullscreenFitMode();
+                state.update(
+                  fit: controller.isFullscreenCover
+                      ? BoxFit.cover
+                      : BoxFit.contain,
+                );
+              },
+              child: Padding(
+                padding: EdgeInsets.all(10.r),
+                child: Icon(icon, color: Colors.white, size: 22),
+              ),
+            ),
+          ),
+        ),
+      );
+    });
+  }
+
   Widget _buildNextEpisodeControlsButton() {
     return Obx(() {
       final hasNext =
@@ -779,10 +815,12 @@ class _PlayerViewState extends State<PlayerView> with WidgetsBindingObserver {
                             ),
                           );
                         }
-                        final fit =
-                            controller.isFullscreen.value &&
-                                controller.isFullscreenCover.value
-                            ? BoxFit.cover
+                        final useFullscreenFitMode =
+                            controller.isFullscreen.value || isCompactHeight;
+                        final fit = useFullscreenFitMode
+                            ? (controller.isFullscreenCover
+                                  ? BoxFit.cover
+                                  : BoxFit.contain)
                             : BoxFit.contain;
                         return Video(
                           controller: controller.videoController,
