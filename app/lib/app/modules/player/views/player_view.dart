@@ -6,6 +6,8 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:media_kit_video/media_kit_video.dart';
+import 'package:screen_brightness/screen_brightness.dart';
+import 'package:volume_controller/volume_controller.dart';
 
 import '../../../widgets/playlist_loading_view.dart';
 import '../controllers/player_controller.dart';
@@ -20,11 +22,17 @@ class PlayerView extends StatefulWidget {
 class _PlayerViewState extends State<PlayerView> with WidgetsBindingObserver {
   final PlayerController controller = Get.find<PlayerController>();
   final ScrollController _episodeScrollController = ScrollController();
+  final ScreenBrightness _screenBrightness = ScreenBrightness.instance;
+  final VolumeController _volumeController = VolumeController.instance;
 
   Timer? _speedBoostTimer;
   int? _speedBoostPointer;
   Offset? _speedBoostStartPosition;
   bool _speedBoostActivated = false;
+  double _gestureBrightness = 0.5;
+  double _gestureVolume = 0.5;
+  bool _gestureMediaLoaded = false;
+  bool _gestureBrightnessChanged = false;
 
   static const _speeds = <double>[0.5, 0.75, 1.0, 1.25, 1.5, 2.0];
   static const _speedBoostDelay = Duration(milliseconds: 260);
@@ -38,20 +46,23 @@ class _PlayerViewState extends State<PlayerView> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
+    _volumeController.showSystemUI = false;
     unawaited(
       SystemChrome.setPreferredOrientations(const [
         DeviceOrientation.portraitUp,
       ]),
     );
+    unawaited(_loadFullscreenGestureMediaState());
     controller.handleRouteArguments(Get.arguments);
     WidgetsBinding.instance.addObserver(this);
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (controller.isFullscreen.value) return;
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.detached) {
+      unawaited(_resetGestureBrightness());
+      if (controller.isFullscreen.value) return;
       unawaited(controller.stopPlayback());
     }
   }
@@ -59,6 +70,8 @@ class _PlayerViewState extends State<PlayerView> with WidgetsBindingObserver {
   @override
   void dispose() {
     _cancelSpeedBoost();
+    _volumeController.showSystemUI = true;
+    unawaited(_resetGestureBrightness());
     unawaited(controller.stopPlayback());
     unawaited(SystemChrome.setPreferredOrientations([]));
     WidgetsBinding.instance.removeObserver(this);
@@ -75,6 +88,55 @@ class _PlayerViewState extends State<PlayerView> with WidgetsBindingObserver {
       _speedBoostActivated = false;
       unawaited(controller.stopSpeedBoost());
     }
+  }
+
+  Future<void> _loadFullscreenGestureMediaState() async {
+    double? brightness;
+    double? volume;
+
+    try {
+      brightness = await _screenBrightness.application;
+    } catch (_) {
+      try {
+        brightness = await _screenBrightness.system;
+      } catch (_) {}
+    }
+
+    try {
+      volume = await _volumeController.getVolume();
+    } catch (_) {}
+
+    if (!mounted) return;
+    setState(() {
+      if (brightness != null) {
+        _gestureBrightness = brightness.clamp(0.0, 1.0);
+      }
+      if (volume != null) {
+        _gestureVolume = volume.clamp(0.0, 1.0);
+      }
+      _gestureMediaLoaded = true;
+    });
+  }
+
+  void _handleFullscreenBrightnessChanged(double value) {
+    final safe = value.clamp(0.0, 1.0);
+    _gestureBrightness = safe;
+    _gestureBrightnessChanged = true;
+    unawaited(_screenBrightness.setApplicationScreenBrightness(safe));
+  }
+
+  void _handleFullscreenVolumeChanged(double value) {
+    final safe = value.clamp(0.0, 1.0);
+    _gestureVolume = safe;
+    unawaited(_volumeController.setVolume(safe));
+  }
+
+  Future<void> _resetGestureBrightness() async {
+    if (!_gestureBrightnessChanged) return;
+    _gestureBrightnessChanged = false;
+    try {
+      await _screenBrightness.resetApplicationScreenBrightness();
+    } catch (_) {}
   }
 
   String _fullscreenBackTitle() {
@@ -1153,6 +1215,12 @@ class _PlayerViewState extends State<PlayerView> with WidgetsBindingObserver {
                                 final fullscreenTheme =
                                     kDefaultMaterialVideoControlsThemeDataFullscreen
                                         .copyWith(
+                                          initialBrightness: _gestureBrightness,
+                                          onBrightnessChanged:
+                                              _handleFullscreenBrightnessChanged,
+                                          initialVolume: _gestureVolume,
+                                          onVolumeChanged:
+                                              _handleFullscreenVolumeChanged,
                                           topButtonBar:
                                               _buildFullscreenTopButtonBar(
                                                 state,
@@ -1168,7 +1236,12 @@ class _PlayerViewState extends State<PlayerView> with WidgetsBindingObserver {
                                 return MaterialVideoControlsTheme(
                                   normal: normalTheme,
                                   fullscreen: fullscreenTheme,
-                                  child: AdaptiveVideoControls(state),
+                                  child: KeyedSubtree(
+                                    key: ValueKey(
+                                      'player-fullscreen-gestures-${_gestureMediaLoaded ? 1 : 0}',
+                                    ),
+                                    child: AdaptiveVideoControls(state),
+                                  ),
                                 );
                               }),
                               const SizedBox.shrink(),
