@@ -77,6 +77,7 @@ class WebdavApi {
     required String path,
     int? page,
     int? size,
+    String? sortType,
   }) {
     final app = applicationType.trim();
     final folder = path.trim().isEmpty ? '/' : path.trim();
@@ -88,6 +89,10 @@ class WebdavApi {
     }
     if (size != null && size > 0) {
       payload['size'] = size;
+    }
+    final normalizedSortType = sortType?.trim() ?? '';
+    if (normalizedSortType.isNotEmpty) {
+      payload['sortType'] = normalizedSortType;
     }
 
     return _httpClient.post<List<WebdavFileEntry>>(

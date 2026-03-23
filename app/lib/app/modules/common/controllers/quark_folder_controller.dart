@@ -3,6 +3,32 @@ import 'package:get/get.dart';
 import '../../../data/api/quark.dart';
 import '../../../data/models/quark_file_entry.dart';
 
+enum WebdavListSortType { updatedDesc, updatedAsc, nameAsc }
+
+extension WebdavListSortTypeX on WebdavListSortType {
+  String get apiValue {
+    switch (this) {
+      case WebdavListSortType.updatedDesc:
+        return 'updated_desc';
+      case WebdavListSortType.updatedAsc:
+        return 'updated_asc';
+      case WebdavListSortType.nameAsc:
+        return 'name_asc';
+    }
+  }
+
+  String get label {
+    switch (this) {
+      case WebdavListSortType.updatedDesc:
+        return '最近更新';
+      case WebdavListSortType.updatedAsc:
+        return '最早更新';
+      case WebdavListSortType.nameAsc:
+        return '名称 A-Z';
+    }
+  }
+}
+
 class WebdavDeleteResult {
   const WebdavDeleteResult({
     required this.successPaths,
@@ -46,6 +72,7 @@ abstract class WebdavFolderController extends GetxController {
   final error = RxnString();
   final loadMoreError = RxnString();
   final deletingPaths = <String>{}.obs;
+  final currentSort = WebdavListSortType.updatedDesc.obs;
   final _navigationStack = <String>[].obs;
   int _page = 1;
   int _loadToken = 0;
@@ -64,15 +91,23 @@ abstract class WebdavFolderController extends GetxController {
   Future<void> loadMoreCurrent() =>
       _load(path: currentPath.value, refresh: false);
 
+  Future<void> changeSort(WebdavListSortType sortType) async {
+    if (currentSort.value == sortType) return;
+    currentSort.value = sortType;
+    await refreshCurrent();
+  }
+
   Future<void> enterDir(WebdavFileEntry entry) async {
     if (!entry.isDir) return;
     _navigationStack.add(currentPath.value);
+    currentSort.value = _defaultSortForPath(entry.path);
     await _load(path: entry.path, refresh: true);
   }
 
   Future<void> popDir() async {
     if (_navigationStack.isEmpty) return;
     final previous = _navigationStack.removeLast();
+    currentSort.value = _defaultSortForPath(previous);
     await _load(path: previous, refresh: true);
   }
 
@@ -205,6 +240,7 @@ abstract class WebdavFolderController extends GetxController {
         path: path,
         page: _page,
         size: pageSize,
+        sortType: currentSort.value.apiValue,
       );
       if (token != _loadToken) return;
 
@@ -237,5 +273,11 @@ abstract class WebdavFolderController extends GetxController {
         }
       }
     }
+  }
+
+  WebdavListSortType _defaultSortForPath(String path) {
+    return path.trim() == '/'
+        ? WebdavListSortType.updatedDesc
+        : WebdavListSortType.nameAsc;
   }
 }

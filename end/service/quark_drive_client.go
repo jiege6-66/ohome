@@ -34,8 +34,9 @@ const (
 	quarkCookieConfigKey     = "quark_cookies"
 	quarkAPITimeout          = 60 * time.Second
 	quarkListRetryCount      = 2
-	quarkListSortByName      = "file_type:asc,file_name:asc"
+	quarkListSortByNameAsc   = "file_type:asc,file_name:asc"
 	quarkListSortByUpdated   = "updated_at:desc,file_name:asc"
+	quarkListSortByOldest    = "updated_at:asc,file_name:asc"
 )
 
 var errQuarkEntryNotFound = errors.New("quark entry not found")
@@ -442,7 +443,7 @@ func (c *quarkClient) driveRequest(ctx context.Context, method, pathname string,
 }
 
 func (c *quarkClient) listAll(ctx context.Context, parentFid string) ([]quarkDriveFile, error) {
-	return c.listAllWithSort(ctx, parentFid, quarkListSortByName)
+	return c.listAllWithSort(ctx, parentFid, quarkListSortByNameAsc)
 }
 
 func (c *quarkClient) listAllWithSort(ctx context.Context, parentFid, sortExpr string) ([]quarkDriveFile, error) {
@@ -451,7 +452,7 @@ func (c *quarkClient) listAllWithSort(ctx context.Context, parentFid, sortExpr s
 	files := make([]quarkDriveFile, 0, pageSize)
 	sortExpr = strings.TrimSpace(sortExpr)
 	if sortExpr == "" {
-		sortExpr = quarkListSortByName
+		sortExpr = quarkListSortByNameAsc
 	}
 
 	for {
@@ -515,7 +516,7 @@ func (c *quarkClient) listAllWithSort(ctx context.Context, parentFid, sortExpr s
 }
 
 func (c *quarkClient) listPage(ctx context.Context, parentFid string, page, size int) ([]quarkDriveFile, int, error) {
-	return c.listPageWithSort(ctx, parentFid, page, size, quarkListSortByName)
+	return c.listPageWithSort(ctx, parentFid, page, size, quarkListSortByNameAsc)
 }
 
 func (c *quarkClient) listPageWithSort(ctx context.Context, parentFid string, page, size int, sortExpr string) ([]quarkDriveFile, int, error) {
@@ -527,7 +528,7 @@ func (c *quarkClient) listPageWithSort(ctx context.Context, parentFid string, pa
 	}
 	sortExpr = strings.TrimSpace(sortExpr)
 	if sortExpr == "" {
-		sortExpr = quarkListSortByName
+		sortExpr = quarkListSortByNameAsc
 	}
 
 	var (

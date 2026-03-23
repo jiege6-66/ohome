@@ -3,9 +3,10 @@ package dto
 // QuarkPathDTO 用于带路径的操作
 type QuarkPathDTO struct {
 	QuarkApplicationDTO
-	Path string `json:"path" form:"path"`
-	Page int    `json:"page,omitempty" form:"page"`
-	Size int    `json:"size,omitempty" form:"size"`
+	Path     string `json:"path" form:"path"`
+	Page     int    `json:"page,omitempty" form:"page"`
+	Size     int    `json:"size,omitempty" form:"size"`
+	SortType string `json:"sortType,omitempty" form:"sortType"`
 }
 
 // QuarkRenameDTO 用于重命名

@@ -66,10 +66,7 @@ func (s *QuarkFsService) ListFiles(pathDTO *dto.QuarkPathDTO) ([]dto.QuarkFsInfo
 	logQuarkWarnf("[quarkFs:list] listing application=%s clientPath=%s targetFid=%s targetName=%s", strings.TrimSpace(pathDTO.Application), clientPath, strings.TrimSpace(targetEntry.Fid), targetEntry.Name())
 	page := pathDTO.Page
 	size := pathDTO.Size
-	sortExpr := quarkListSortByName
-	if clientPath == "/" {
-		sortExpr = quarkListSortByUpdated
-	}
+	sortExpr := s.resolveListSortExpr(pathDTO, clientPath)
 
 	var entries []quarkDriveFile
 	if size > 0 {
@@ -116,6 +113,22 @@ func (s *QuarkFsService) ListFiles(pathDTO *dto.QuarkPathDTO) ([]dto.QuarkFsInfo
 
 	logQuarkWarnf("[quarkFs:list] finish application=%s clientPath=%s responseCount=%d", strings.TrimSpace(pathDTO.Application), clientPath, len(files))
 	return files, nil
+}
+
+func (s *QuarkFsService) resolveListSortExpr(pathDTO *dto.QuarkPathDTO, clientPath string) string {
+	switch strings.TrimSpace(pathDTO.SortType) {
+	case "updated_desc":
+		return quarkListSortByUpdated
+	case "updated_asc":
+		return quarkListSortByOldest
+	case "name_asc":
+		return quarkListSortByNameAsc
+	default:
+		if clientPath == "/" {
+			return quarkListSortByUpdated
+		}
+		return quarkListSortByNameAsc
+	}
 }
 
 func (s *QuarkFsService) GetFileMetadata(pathDTO *dto.QuarkPathDTO) (dto.QuarkFsMetaInfo, error) {

@@ -206,9 +206,16 @@ class _ResourceCardPageState extends State<ResourceCardPage> {
       final hasMore = widget.controller.hasMore.value;
       final error = widget.controller.error.value;
       final loadMoreError = widget.controller.loadMoreError.value;
+      final currentSort = widget.controller.currentSort.value;
       final selectedPaths = _visibleSelectedPaths(entries);
       final selectedCount = selectedPaths.length;
       final actionDisabled = loading || _operationInProgress;
+      final sortDisabled =
+          actionDisabled ||
+          loadingMore ||
+          _selectionMode ||
+          _renameMode ||
+          _moveMode;
 
       return Scaffold(
         appBar: AppBar(
@@ -312,6 +319,8 @@ class _ResourceCardPageState extends State<ResourceCardPage> {
           hasMore: hasMore,
           error: error,
           loadMoreError: loadMoreError,
+          currentSort: currentSort,
+          sortDisabled: sortDisabled,
         ),
       );
     });
@@ -325,6 +334,8 @@ class _ResourceCardPageState extends State<ResourceCardPage> {
     required bool hasMore,
     required String? error,
     required String? loadMoreError,
+    required WebdavListSortType currentSort,
+    required bool sortDisabled,
   }) {
     if (loading) {
       return const Center(child: CircularProgressIndicator());
@@ -399,6 +410,12 @@ class _ResourceCardPageState extends State<ResourceCardPage> {
     return CustomScrollView(
       controller: _scrollController,
       slivers: [
+        SliverToBoxAdapter(
+          child: _buildSortToolbar(
+            currentSort: currentSort,
+            disabled: sortDisabled,
+          ),
+        ),
         SliverPadding(
           padding: const EdgeInsets.all(12),
           sliver: SliverMasonryGrid.count(
@@ -427,6 +444,51 @@ class _ResourceCardPageState extends State<ResourceCardPage> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildSortToolbar({
+    required WebdavListSortType currentSort,
+    required bool disabled,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            '排序方式',
+            style: TextStyle(
+              color: Colors.white70,
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            height: 36,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: WebdavListSortType.values.length,
+              separatorBuilder: (context, index) => const SizedBox(width: 8),
+              itemBuilder: (context, index) {
+                final option = WebdavListSortType.values[index];
+                final selected = option == currentSort;
+                return ChoiceChip(
+                  label: Text(option.label),
+                  selected: selected,
+                  showCheckmark: false,
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  visualDensity: VisualDensity.compact,
+                  onSelected: disabled || selected
+                      ? null
+                      : (_) => widget.controller.changeSort(option),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
     );
   }
 
