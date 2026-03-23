@@ -62,7 +62,7 @@ class PlayerController extends GetxController {
   final RxBool isControlsLocked = false.obs;
   final Rx<Duration> skipIntro = Duration.zero.obs;
   final Rx<Duration> skipOutro = Duration.zero.obs;
-  final Rx<FullscreenFitMode> fullscreenFitMode = FullscreenFitMode.cover.obs;
+  final Rx<FullscreenFitMode> fullscreenFitMode = FullscreenFitMode.contain.obs;
   final RxBool isLoadingPlaylist = false.obs;
 
   bool _autoNextRunning = false;

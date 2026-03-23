@@ -29,6 +29,7 @@ class _PlayerViewState extends State<PlayerView> with WidgetsBindingObserver {
   static const _speedBoostDelay = Duration(milliseconds: 260);
   static const double _speedBoostZoneRatio = 0.66;
   static const double _episodeListItemExtent = 72;
+  static const double _episodeDrawerItemExtent = 64;
   static const double _gestureExcludeTopRatio = 0.15;
   static const double _gestureExcludeBottomRatio = 0.18;
 
@@ -136,6 +137,7 @@ class _PlayerViewState extends State<PlayerView> with WidgetsBindingObserver {
         return PopupMenuButton<double>(
           color: const Color(0xFF1A1A1A),
           initialValue: rate,
+          tooltip: '倍速 ${_formatRate(rate)}',
           onSelected: (value) => unawaited(controller.setPlaybackRate(value)),
           itemBuilder: (context) {
             return _speeds
@@ -150,19 +152,11 @@ class _PlayerViewState extends State<PlayerView> with WidgetsBindingObserver {
                 )
                 .toList(growable: false);
           },
-          child: Container(
-            padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 8.h),
-            decoration: BoxDecoration(
-              color: Colors.black38,
-              borderRadius: BorderRadius.circular(24.r),
-              border: Border.all(color: Colors.white12),
-            ),
-            child: Text(
-              _formatRate(rate),
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w600,
-              ),
+          child: IgnorePointer(
+            child: _buildActionIcon(
+              enabled: true,
+              icon: Icons.speed_rounded,
+              onTap: () {},
             ),
           ),
         );
@@ -273,6 +267,28 @@ class _PlayerViewState extends State<PlayerView> with WidgetsBindingObserver {
       position.maxScrollExtent,
     );
     _episodeScrollController.animateTo(
+      clamped,
+      duration: const Duration(milliseconds: 280),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
+  void _scrollEpisodeSheetToCurrent(ScrollController scrollController) {
+    final indices = controller.visibleEpisodeIndices;
+    final selectedIndex = controller.currentIndex.value;
+    final selectedVisibleIndex = indices.indexOf(selectedIndex);
+    if (selectedVisibleIndex < 0) return;
+    if (!scrollController.hasClients) return;
+    const estimatedSeparatorHeight = 10.0;
+    final target =
+        (selectedVisibleIndex - 1) *
+        (_episodeDrawerItemExtent.h + estimatedSeparatorHeight.h);
+    final position = scrollController.position;
+    final clamped = target.clamp(
+      position.minScrollExtent,
+      position.maxScrollExtent,
+    );
+    scrollController.animateTo(
       clamped,
       duration: const Duration(milliseconds: 280),
       curve: Curves.easeOutCubic,
@@ -449,178 +465,256 @@ class _PlayerViewState extends State<PlayerView> with WidgetsBindingObserver {
 
   void _showEpisodeSheet(BuildContext context, {bool compact = false}) {
     final scrollController = ScrollController();
-
-    final future = showModalBottomSheet<void>(
-      context: context,
-      useRootNavigator: true,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) {
-        final mediaQuery = MediaQuery.of(context);
-        final data = compact
-            ? mediaQuery.copyWith(textScaler: const TextScaler.linear(0.9))
-            : mediaQuery;
-        final height = 0.82.sh;
-        return MediaQuery(
-          data: data,
-          child: SafeArea(
-            child: Container(
-              height: height,
-              decoration: const BoxDecoration(
-                color: Color(0xFF111111),
-                borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-              ),
-              child: Column(
-                children: [
-                  Padding(
-                    padding: EdgeInsets.fromLTRB(16.w, 12.h, 8.w, 8.h),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            '选集',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: compact ? 13 : 16,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                        Obx(() {
-                          final asc = controller.episodesAscending.value;
-                          return TextButton.icon(
-                            onPressed: controller.toggleEpisodeOrder,
-                            icon: Icon(
-                              asc ? Icons.arrow_downward : Icons.arrow_upward,
-                              color: Colors.white,
-                              size: compact ? 16 : 18,
-                            ),
-                            label: Text(
-                              asc ? '正序' : '倒序',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: compact ? 12 : 14,
-                              ),
-                            ),
-                          );
-                        }),
-                        IconButton(
-                          onPressed: () {
-                            final indices = controller.visibleEpisodeIndices;
-                            final selectedIndex = controller.currentIndex.value;
-                            final selectedVisibleIndex = indices.indexOf(
-                              selectedIndex,
-                            );
-                            if (selectedVisibleIndex < 0) return;
-                            if (!scrollController.hasClients) return;
-                            const estimatedItemHeight = 56.0;
-                            const estimatedSeparatorHeight = 10.0;
-                            final target =
-                                (selectedVisibleIndex - 1) *
-                                (estimatedItemHeight.h +
-                                    estimatedSeparatorHeight.h);
-                            final position = scrollController.position;
-                            final clamped = target.clamp(
-                              position.minScrollExtent,
-                              position.maxScrollExtent,
-                            );
-                            scrollController.animateTo(
-                              clamped,
-                              duration: const Duration(milliseconds: 280),
-                              curve: Curves.easeOutCubic,
-                            );
-                          },
-                          icon: Icon(
-                            Icons.my_location,
-                            color: Colors.white,
-                            size: compact ? 18 : 20,
-                          ),
-                        ),
-                        IconButton(
-                          onPressed: () => Navigator.of(context).pop(),
-                          icon: Icon(
-                            Icons.close,
-                            color: Colors.white,
-                            size: compact ? 20 : 24,
-                          ),
-                        ),
-                      ],
+    Widget buildEpisodePanel(
+      BuildContext panelContext, {
+      bool sidePanel = false,
+    }) {
+      final panelBody = Column(
+        children: [
+          Container(
+            padding: sidePanel
+                ? EdgeInsets.fromLTRB(14.w, 10.h, 6.w, 10.h)
+                : EdgeInsets.fromLTRB(16.w, 12.h, 8.w, 8.h),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    '选集',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: compact ? 13 : 16,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
-                  const Divider(height: 1, color: Colors.white24),
-                  Expanded(
-                    child: Obx(() {
-                      final indices = controller.visibleEpisodeIndices;
-                      final selectedIndex = controller.currentIndex.value;
-                      final fontSize = compact ? 13.0 : 15.0.sp;
-                      return ListView.separated(
-                        controller: scrollController,
-                        padding: EdgeInsets.all(16.w),
-                        itemCount: indices.length,
-                        separatorBuilder: (context, index) =>
-                            SizedBox(height: 10.h),
-                        itemBuilder: (context, i) {
-                          final episodeIndex = indices[i];
-                          final selected = episodeIndex == selectedIndex;
-                          final theme = Theme.of(context);
-                          final bg = selected
-                              ? theme.colorScheme.primary
-                              : Colors.white12;
-                          return Material(
-                            color: bg,
-                            borderRadius: BorderRadius.circular(10.r),
-                            child: InkWell(
-                              borderRadius: BorderRadius.circular(10.r),
-                              onTap: () async {
-                                await controller.playAt(episodeIndex);
-                                if (context.mounted) {
-                                  Navigator.of(context).pop();
-                                }
-                              },
-                              child: Padding(
-                                padding: EdgeInsets.symmetric(
-                                  horizontal: 12.w,
-                                  vertical: 10.h,
-                                ),
-                                child: Row(
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                        _episodeLabel(episodeIndex),
-                                        textAlign: TextAlign.left,
-                                        style: TextStyle(
-                                          color: Colors.white,
-                                          fontWeight: selected
-                                              ? FontWeight.w600
-                                              : FontWeight.w500,
-                                          fontSize: fontSize,
-                                        ),
-                                      ),
-                                    ),
-                                    if (selected) ...[
-                                      SizedBox(width: 10.w),
-                                      const Icon(
-                                        Icons.check,
-                                        color: Colors.white,
-                                        size: 18,
-                                      ),
-                                    ],
-                                  ],
-                                ),
-                              ),
-                            ),
-                          );
-                        },
-                      );
-                    }),
+                ),
+                IconButton(
+                  onPressed: () =>
+                      _scrollEpisodeSheetToCurrent(scrollController),
+                  icon: Icon(
+                    Icons.my_location,
+                    color: Colors.white,
+                    size: compact ? 18 : 20,
                   ),
-                ],
-              ),
+                ),
+                Obx(() {
+                  final asc = controller.episodesAscending.value;
+                  return TextButton.icon(
+                    onPressed: controller.toggleEpisodeOrder,
+                    icon: Icon(
+                      asc ? Icons.arrow_downward : Icons.arrow_upward,
+                      color: Colors.white,
+                      size: compact ? 16 : 18,
+                    ),
+                    label: Text(
+                      asc ? '正序' : '倒序',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: compact ? 12 : 14,
+                      ),
+                    ),
+                  );
+                }),
+                if (!sidePanel)
+                  IconButton(
+                    onPressed: () => Navigator.of(panelContext).pop(),
+                    icon: Icon(
+                      Icons.close,
+                      color: Colors.white,
+                      size: compact ? 20 : 24,
+                    ),
+                  ),
+              ],
             ),
           ),
+          Divider(
+            height: 1,
+            color: sidePanel ? Colors.white12 : Colors.white24,
+          ),
+          Expanded(
+            child: Obx(() {
+              final indices = controller.visibleEpisodeIndices;
+              final selectedIndex = controller.currentIndex.value;
+              final fontSize = compact ? 13.0 : 15.0.sp;
+              return ListView.separated(
+                controller: scrollController,
+                padding: sidePanel
+                    ? EdgeInsets.fromLTRB(14.w, 12.h, 14.w, 14.h)
+                    : EdgeInsets.all(16.w),
+                itemCount: indices.length,
+                separatorBuilder: (context, index) => SizedBox(height: 10.h),
+                itemBuilder: (context, i) {
+                  final episodeIndex = indices[i];
+                  final selected = episodeIndex == selectedIndex;
+                  final theme = Theme.of(context);
+                  final bg = selected
+                      ? theme.colorScheme.primary
+                      : sidePanel
+                      ? Colors.white10
+                      : Colors.white12;
+                  return Material(
+                    color: Colors.transparent,
+                    child: Ink(
+                      decoration: BoxDecoration(
+                        color: bg,
+                        borderRadius: BorderRadius.circular(10.r),
+                        border: sidePanel
+                            ? Border.all(
+                                color: selected
+                                    ? theme.colorScheme.primary.withValues(
+                                        alpha: 0.28,
+                                      )
+                                    : Colors.white.withValues(alpha: 0.08),
+                              )
+                            : null,
+                      ),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(10.r),
+                        onTap: () async {
+                          await controller.playAt(episodeIndex);
+                          if (context.mounted) {
+                            Navigator.of(panelContext).pop();
+                          }
+                        },
+                        child: SizedBox(
+                          height: _episodeDrawerItemExtent.h,
+                          child: Stack(
+                            children: [
+                              Positioned.fill(
+                                child: Padding(
+                                  padding: EdgeInsets.symmetric(
+                                    horizontal: 40.w,
+                                  ),
+                                  child: Center(
+                                    child: Text(
+                                      _episodeLabel(episodeIndex),
+                                      textAlign: TextAlign.center,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontWeight: selected
+                                            ? FontWeight.w600
+                                            : FontWeight.w500,
+                                        fontSize: fontSize,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              if (selected)
+                                Positioned(
+                                  right: 12.w,
+                                  top: 0,
+                                  bottom: 0,
+                                  child: const Center(
+                                    child: Icon(
+                                      Icons.check,
+                                      color: Colors.white,
+                                      size: 18,
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              );
+            }),
+          ),
+        ],
+      );
+
+      if (sidePanel) {
+        return Container(
+          clipBehavior: Clip.antiAlias,
+          decoration: BoxDecoration(
+            color: const Color(0xFF111111),
+            borderRadius: BorderRadius.horizontal(left: Radius.circular(20.r)),
+          ),
+          child: panelBody,
         );
-      },
-    );
+      }
+
+      return Container(
+        height: 0.82.sh,
+        decoration: const BoxDecoration(
+          color: Color(0xFF111111),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+        ),
+        child: panelBody,
+      );
+    }
+
+    final future = compact
+        ? showGeneralDialog<void>(
+            context: context,
+            useRootNavigator: true,
+            barrierDismissible: true,
+            barrierLabel: MaterialLocalizations.of(
+              context,
+            ).modalBarrierDismissLabel,
+            barrierColor: Colors.black38,
+            transitionDuration: const Duration(milliseconds: 260),
+            pageBuilder: (dialogContext, animation, secondaryAnimation) {
+              final mediaQuery = MediaQuery.of(dialogContext);
+              final data = mediaQuery.copyWith(
+                textScaler: const TextScaler.linear(0.9),
+              );
+              final panelWidth = mediaQuery.size.width / 3;
+              return MediaQuery(
+                data: data,
+                child: SafeArea(
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: SizedBox(
+                      width: panelWidth,
+                      height: mediaQuery.size.height,
+                      child: buildEpisodePanel(dialogContext, sidePanel: true),
+                    ),
+                  ),
+                ),
+              );
+            },
+            transitionBuilder:
+                (dialogContext, animation, secondaryAnimation, child) {
+                  final curved = CurvedAnimation(
+                    parent: animation,
+                    curve: Curves.easeOutCubic,
+                    reverseCurve: Curves.easeInCubic,
+                  );
+                  return FadeTransition(
+                    opacity: curved,
+                    child: SlideTransition(
+                      position: Tween<Offset>(
+                        begin: const Offset(1, 0),
+                        end: Offset.zero,
+                      ).animate(curved),
+                      child: child,
+                    ),
+                  );
+                },
+          )
+        : showModalBottomSheet<void>(
+            context: context,
+            useRootNavigator: true,
+            isScrollControlled: true,
+            backgroundColor: Colors.transparent,
+            builder: (context) {
+              final mediaQuery = MediaQuery.of(context);
+              final data = compact
+                  ? mediaQuery.copyWith(
+                      textScaler: const TextScaler.linear(0.9),
+                    )
+                  : mediaQuery;
+              return MediaQuery(
+                data: data,
+                child: SafeArea(child: buildEpisodePanel(context)),
+              );
+            },
+          );
     future.whenComplete(scrollController.dispose);
   }
 
