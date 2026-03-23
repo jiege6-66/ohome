@@ -23,10 +23,12 @@ class _PlayerViewState extends State<PlayerView> with WidgetsBindingObserver {
 
   Timer? _speedBoostTimer;
   int? _speedBoostPointer;
+  Offset? _speedBoostStartPosition;
   bool _speedBoostActivated = false;
 
   static const _speeds = <double>[0.5, 0.75, 1.0, 1.25, 1.5, 2.0];
   static const _speedBoostDelay = Duration(milliseconds: 260);
+  static const double _speedBoostCancelMoveThreshold = 12;
   static const double _speedBoostZoneRatio = 0.66;
   static const double _episodeListItemExtent = 72;
   static const double _episodeDrawerItemExtent = 64;
@@ -68,6 +70,7 @@ class _PlayerViewState extends State<PlayerView> with WidgetsBindingObserver {
     _speedBoostTimer?.cancel();
     _speedBoostTimer = null;
     _speedBoostPointer = null;
+    _speedBoostStartPosition = null;
     if (_speedBoostActivated) {
       _speedBoostActivated = false;
       unawaited(controller.stopSpeedBoost());
@@ -214,6 +217,7 @@ class _PlayerViewState extends State<PlayerView> with WidgetsBindingObserver {
     if (local.dy > height * (1 - _gestureExcludeBottomRatio)) return;
 
     _speedBoostPointer = event.pointer;
+    _speedBoostStartPosition = local;
     _speedBoostActivated = false;
     _speedBoostTimer?.cancel();
     _speedBoostTimer = Timer(_speedBoostDelay, () {
@@ -233,10 +237,25 @@ class _PlayerViewState extends State<PlayerView> with WidgetsBindingObserver {
     if (width <= 0) return;
 
     if (_speedBoostActivated) return;
+    final start = _speedBoostStartPosition;
+    if (start != null) {
+      final movedFar =
+          (local.dx - start.dx).abs() > _speedBoostCancelMoveThreshold ||
+          (local.dy - start.dy).abs() > _speedBoostCancelMoveThreshold;
+      if (movedFar) {
+        _speedBoostTimer?.cancel();
+        _speedBoostTimer = null;
+        _speedBoostPointer = null;
+        _speedBoostStartPosition = null;
+        if (mounted) setState(() {});
+        return;
+      }
+    }
     if (local.dx >= width * _speedBoostZoneRatio) return;
     _speedBoostTimer?.cancel();
     _speedBoostTimer = null;
     _speedBoostPointer = null;
+    _speedBoostStartPosition = null;
     if (mounted) setState(() {});
   }
 
