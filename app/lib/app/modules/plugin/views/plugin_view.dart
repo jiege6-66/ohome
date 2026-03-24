@@ -258,11 +258,13 @@ class PluginView extends GetView<PluginController> {
                 loading: controller.profileUpdating.value,
                 onTap: controller.profileUpdating.value
                     ? null
-                    : () => Get.dialog<void>(
-                        _EditProfileDialog(
+                    : () => Get.bottomSheet<void>(
+                        _EditProfileSheet(
                           controller: controller,
                           initialUser: user,
                         ),
+                        isScrollControlled: true,
+                        backgroundColor: Colors.transparent,
                       ),
               ),
             ],
@@ -284,29 +286,43 @@ class _ProfileEditButton extends StatelessWidget {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(999.r),
-      child: SizedBox(
-        width: 28.w,
-        height: 28.w,
-        child: Center(
-          child: loading
-              ? SizedBox(
-                  width: 16.w,
-                  height: 16.w,
-                  child: const CircularProgressIndicator(strokeWidth: 2),
-                )
-              : Icon(
-                  Icons.chevron_right_rounded,
-                  size: 24.w,
-                  color: Colors.white38,
-                ),
+      child: Container(
+        height: 34.h,
+        padding: EdgeInsets.symmetric(horizontal: 12.w),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.06),
+          borderRadius: BorderRadius.circular(999.r),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (loading)
+              SizedBox(
+                width: 14.w,
+                height: 14.w,
+                child: const CircularProgressIndicator(strokeWidth: 2),
+              )
+            else
+              Icon(Icons.edit_outlined, size: 15.w, color: Colors.white70),
+            SizedBox(width: 6.w),
+            Text(
+              '修改资料',
+              style: TextStyle(
+                fontSize: 12.sp,
+                fontWeight: FontWeight.w600,
+                color: Colors.white,
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 }
 
-class _EditProfileDialog extends StatefulWidget {
-  const _EditProfileDialog({
+class _EditProfileSheet extends StatefulWidget {
+  const _EditProfileSheet({
     required this.controller,
     required this.initialUser,
   });
@@ -315,10 +331,10 @@ class _EditProfileDialog extends StatefulWidget {
   final UserModel initialUser;
 
   @override
-  State<_EditProfileDialog> createState() => _EditProfileDialogState();
+  State<_EditProfileSheet> createState() => _EditProfileSheetState();
 }
 
-class _EditProfileDialogState extends State<_EditProfileDialog> {
+class _EditProfileSheetState extends State<_EditProfileSheet> {
   final _formKey = GlobalKey<FormState>();
 
   late final TextEditingController _nameController;
@@ -355,88 +371,183 @@ class _EditProfileDialogState extends State<_EditProfileDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      scrollable: true,
-      backgroundColor: const Color(0xFF1A1A1A),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24.r)),
-      titlePadding: EdgeInsets.fromLTRB(20.w, 20.h, 20.w, 8.h),
-      contentPadding: EdgeInsets.fromLTRB(20.w, 0, 20.w, 8.h),
-      actionsPadding: EdgeInsets.fromLTRB(12.w, 0, 12.w, 12.h),
-      title: Text(
-        '编辑资料',
-        style: TextStyle(
-          fontSize: 18.sp,
-          fontWeight: FontWeight.w700,
-          color: Colors.white,
-        ),
+    final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFF171717),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(30.r)),
       ),
-      content: Form(
-        key: _formKey,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '修改当前账号的用户名和昵称',
-              style: TextStyle(fontSize: 12.sp, color: Colors.white54),
-            ),
-            SizedBox(height: 16.h),
-            _ProfileTextField(
-              label: '用户名',
-              controller: _nameController,
-              hintText: '请输入用户名',
-              validator: (value) {
-                if (value == null || value.trim().isEmpty) {
-                  return '请输入用户名';
-                }
-                return null;
-              },
-            ),
-            SizedBox(height: 14.h),
-            _ProfileTextField(
-              label: '昵称',
-              controller: _realNameController,
-              hintText: '请输入昵称',
-              validator: (value) {
-                if (value == null || value.trim().isEmpty) {
-                  return '请输入昵称';
-                }
-                return null;
-              },
-            ),
-          ],
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Get.back<void>(),
-          child: Text(
-            '取消',
-            style: TextStyle(fontSize: 13.sp, color: Colors.white60),
-          ),
-        ),
-        Obx(
-          () => FilledButton(
-            onPressed: widget.controller.profileUpdating.value ? null : _submit,
-            style: FilledButton.styleFrom(
-              backgroundColor: AppThemeColors.primary,
-            ),
-            child: widget.controller.profileUpdating.value
-                ? SizedBox(
-                    width: 16.w,
-                    height: 16.w,
-                    child: const CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : Text(
-                    '保存',
-                    style: TextStyle(
-                      fontSize: 13.sp,
-                      fontWeight: FontWeight.w600,
+      child: SafeArea(
+        top: false,
+        child: SingleChildScrollView(
+          padding: EdgeInsets.fromLTRB(20.w, 14.h, 20.w, 20.h + bottomInset),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 42.w,
+                    height: 4.h,
+                    decoration: BoxDecoration(
+                      color: Colors.white24,
+                      borderRadius: BorderRadius.circular(999.r),
                     ),
                   ),
+                ),
+                SizedBox(height: 20.h),
+                Container(
+                  width: double.infinity,
+                  padding: EdgeInsets.all(18.w),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        AppThemeColors.primary.withValues(alpha: 0.18),
+                        AppThemeColors.secondary.withValues(alpha: 0.08),
+                      ],
+                    ),
+                    borderRadius: BorderRadius.circular(24.r),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.08),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 46.w,
+                        height: 46.w,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(16.r),
+                        ),
+                        child: Icon(
+                          Icons.manage_accounts_rounded,
+                          color: Colors.white,
+                          size: 24.w,
+                        ),
+                      ),
+                      SizedBox(width: 14.w),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '修改资料',
+                              style: TextStyle(
+                                fontSize: 18.sp,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.white,
+                              ),
+                            ),
+                            SizedBox(height: 4.h),
+                            Text(
+                              '更新用户名和昵称',
+                              style: TextStyle(
+                                fontSize: 12.sp,
+                                color: Colors.white70,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                SizedBox(height: 18.h),
+                _ProfileTextField(
+                  label: '用户名',
+                  controller: _nameController,
+                  hintText: '请输入用户名',
+                  icon: Icons.person_outline_rounded,
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return '请输入用户名';
+                    }
+                    return null;
+                  },
+                ),
+                SizedBox(height: 14.h),
+                _ProfileTextField(
+                  label: '昵称',
+                  controller: _realNameController,
+                  hintText: '请输入昵称',
+                  icon: Icons.badge_outlined,
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return '请输入昵称';
+                    }
+                    return null;
+                  },
+                ),
+                SizedBox(height: 22.h),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Get.back<void>(),
+                        style: OutlinedButton.styleFrom(
+                          minimumSize: Size.fromHeight(50.h),
+                          side: BorderSide(
+                            color: Colors.white.withValues(alpha: 0.12),
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16.r),
+                          ),
+                        ),
+                        child: Text(
+                          '取消',
+                          style: TextStyle(
+                            fontSize: 14.sp,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white70,
+                          ),
+                        ),
+                      ),
+                    ),
+                    SizedBox(width: 12.w),
+                    Expanded(
+                      child: Obx(
+                        () => FilledButton(
+                          onPressed: widget.controller.profileUpdating.value
+                              ? null
+                              : _submit,
+                          style: FilledButton.styleFrom(
+                            minimumSize: Size.fromHeight(50.h),
+                            backgroundColor: AppThemeColors.primary,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16.r),
+                            ),
+                          ),
+                          child: widget.controller.profileUpdating.value
+                              ? SizedBox(
+                                  width: 18.w,
+                                  height: 18.w,
+                                  child: const CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : Text(
+                                  '保存',
+                                  style: TextStyle(
+                                    fontSize: 14.sp,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
-      ],
+      ),
     );
   }
 }
@@ -446,12 +557,14 @@ class _ProfileTextField extends StatelessWidget {
     required this.label,
     required this.controller,
     required this.hintText,
+    required this.icon,
     required this.validator,
   });
 
   final String label;
   final TextEditingController controller;
   final String hintText;
+  final IconData icon;
   final String? Function(String?) validator;
 
   @override
@@ -475,8 +588,9 @@ class _ProfileTextField extends StatelessWidget {
           decoration: InputDecoration(
             hintText: hintText,
             hintStyle: TextStyle(fontSize: 13.sp, color: Colors.white38),
+            prefixIcon: Icon(icon, color: Colors.white38, size: 20.w),
             filled: true,
-            fillColor: const Color(0xFF101010),
+            fillColor: const Color(0xFF111111),
             contentPadding: EdgeInsets.symmetric(
               horizontal: 14.w,
               vertical: 14.h,
