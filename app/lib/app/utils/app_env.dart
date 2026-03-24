@@ -22,12 +22,14 @@ enum AppEnvironment {
 class AppEnv {
   AppEnv._({
     required this.environment,
+    required String defaultApiBaseUrl,
     required String apiBaseUrl,
     required this.rawAppUpdateManifestUrl,
     this.appUpdateUrlProxyPrefix,
     this.appUpdateUsePackageInstaller = false,
     AppEnvStorage? storage,
-  }) : _apiBaseUrl = apiBaseUrl,
+  }) : _defaultApiBaseUrl = defaultApiBaseUrl,
+       _apiBaseUrl = apiBaseUrl,
        _storage = storage ?? AppEnvStorage();
 
   final String environment;
@@ -36,23 +38,30 @@ class AppEnv {
   final bool appUpdateUsePackageInstaller;
   final AppEnvStorage _storage;
 
+  final String _defaultApiBaseUrl;
   String _apiBaseUrl;
+
+  String get defaultApiBaseUrl => _defaultApiBaseUrl;
 
   String get apiBaseUrl => _apiBaseUrl;
 
-  String get apiBaseUrlInputValue {
-    final uri = Uri.parse(_apiBaseUrl);
+  String get defaultApiBaseUrlInputValue =>
+      _toApiBaseUrlInputValue(_defaultApiBaseUrl);
+
+  String get apiBaseUrlInputValue => _toApiBaseUrlInputValue(_apiBaseUrl);
+
+  String _toApiBaseUrlInputValue(String value) {
+    final uri = Uri.parse(value);
     final pathSegments = uri.pathSegments
         .where((segment) => segment.trim().isNotEmpty)
         .toList(growable: false);
     if (pathSegments.length == 2 &&
         pathSegments[0] == 'api' &&
         pathSegments[1] == 'v1') {
-      return apiServerOrigin;
+      final portText = uri.hasPort ? ':${uri.port}' : '';
+      return '${uri.scheme}://${uri.host}$portText';
     }
-    return _apiBaseUrl.endsWith('/')
-        ? _apiBaseUrl.substring(0, _apiBaseUrl.length - 1)
-        : _apiBaseUrl;
+    return value.endsWith('/') ? value.substring(0, value.length - 1) : value;
   }
 
   String get apiServerOrigin {
@@ -147,6 +156,7 @@ class AppEnv {
 
     _instance = AppEnv._(
       environment: environment.name,
+      defaultApiBaseUrl: defaultApiBaseUrl,
       apiBaseUrl: effectiveApiBaseUrl,
       rawAppUpdateManifestUrl: appUpdateManifestUrl,
       appUpdateUrlProxyPrefix: appUpdateUrlProxyPrefix,

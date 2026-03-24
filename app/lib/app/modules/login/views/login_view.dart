@@ -410,13 +410,35 @@ class _ServerSettingsSheet extends GetView<LoginController> {
                   ),
                 if (isManualEntryMode) ...[
                   SizedBox(height: 4.h),
-                  Text(
-                    '手动地址',
-                    style: TextStyle(
-                      fontSize: 14.sp,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white,
-                    ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        '手动地址',
+                        style: TextStyle(
+                          fontSize: 14.sp,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: controller.applyDefaultApiBaseUrl,
+                        style: TextButton.styleFrom(
+                          foregroundColor: AppThemeColors.primary,
+                          padding: EdgeInsets.zero,
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        child: Text(
+                          '默认地址',
+                          style: TextStyle(
+                            fontSize: 13.sp,
+                            fontWeight: FontWeight.w600,
+                            color: AppThemeColors.primary,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                   SizedBox(height: 8.h),
                   TextField(
@@ -675,14 +697,35 @@ class _RegisterEntryButton extends GetView<LoginController> {
 
   @override
   Widget build(BuildContext context) {
-    return TextButton(
-      onPressed: controller.openRegister,
-      child: Text(
-        '没有账号？立即注册',
-        style: TextStyle(
-          fontSize: 13.sp,
-          color: Colors.white70,
-          fontWeight: FontWeight.w500,
+    return SizedBox(
+      width: double.infinity,
+      child: TextButton(
+        onPressed: controller.openRegister,
+        style: TextButton.styleFrom(
+          alignment: Alignment.centerRight,
+          padding: EdgeInsets.zero,
+          minimumSize: Size.zero,
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        ),
+        child: Text.rich(
+          TextSpan(
+            style: TextStyle(
+              fontSize: 13.sp,
+              color: Colors.white70,
+              fontWeight: FontWeight.w500,
+            ),
+            children: const [
+              TextSpan(text: '没有账号？ '),
+              TextSpan(
+                text: '立即注册',
+                style: TextStyle(
+                  color: AppThemeColors.primary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          textAlign: TextAlign.right,
         ),
       ),
     );

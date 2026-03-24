@@ -716,14 +716,35 @@ class _BackToLoginButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return TextButton(
-      onPressed: Get.back<void>,
-      child: Text(
-        '已有账号？返回登录',
-        style: TextStyle(
-          fontSize: 13.sp,
-          color: Colors.white70,
-          fontWeight: FontWeight.w500,
+    return SizedBox(
+      width: double.infinity,
+      child: TextButton(
+        onPressed: Get.back<void>,
+        style: TextButton.styleFrom(
+          alignment: Alignment.centerRight,
+          padding: EdgeInsets.zero,
+          minimumSize: Size.zero,
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        ),
+        child: Text.rich(
+          TextSpan(
+            style: TextStyle(
+              fontSize: 13.sp,
+              color: Colors.white70,
+              fontWeight: FontWeight.w500,
+            ),
+            children: const [
+              TextSpan(text: '已有账号？ '),
+              TextSpan(
+                text: '立即登录',
+                style: TextStyle(
+                  color: AppThemeColors.primary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          textAlign: TextAlign.right,
         ),
       ),
     );

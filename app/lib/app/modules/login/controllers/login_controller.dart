@@ -341,6 +341,16 @@ class LoginController extends GetxController {
     return '手动输入或重新扫描';
   }
 
+  String get defaultApiBaseUrlInputValue =>
+      AppEnv.instance.defaultApiBaseUrlInputValue;
+
+  void applyDefaultApiBaseUrl() {
+    apiBaseUrlController.text = defaultApiBaseUrlInputValue;
+    apiBaseUrlController.selection = TextSelection.collapsed(
+      offset: apiBaseUrlController.text.length,
+    );
+  }
+
   void _applySelectedServer(
     DiscoveredServer server, {
     required bool userInitiated,
