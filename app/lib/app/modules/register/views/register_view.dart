@@ -85,8 +85,6 @@ class RegisterView extends GetView<RegisterController> {
                                     const _Header(),
                                     SizedBox(height: 24.h),
                                     const _CredentialsFields(),
-                                    SizedBox(height: 18.h),
-                                    const _RegisterStatusBanner(),
                                     SizedBox(height: 28.h),
                                     const _SubmitButton(),
                                     SizedBox(height: 14.h),
@@ -142,66 +140,50 @@ class _Header extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '创建你的家庭账号',
-                    style: TextStyle(
-                      fontSize: 15.sp,
-                      fontWeight: FontWeight.w400,
-                      color: Colors.white70,
-                      letterSpacing: 1.1,
-                    ),
-                  ),
-                  SizedBox(height: 4.h),
-                  Text(
-                    '注册',
-                    style: TextStyle(
-                      fontSize: 34.sp,
-                      fontWeight: FontWeight.w800,
-                      color: Colors.white,
-                      letterSpacing: 1.5,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Container(
-              padding: EdgeInsets.all(4.w),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(16.r),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(12.r),
-                child: Image.asset(
-                  'assets/images/logo.png',
-                  width: 56.w,
-                  height: 56.w,
-                  fit: BoxFit.cover,
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '创建你的家庭账号',
+                style: TextStyle(
+                  fontSize: 15.sp,
+                  fontWeight: FontWeight.w400,
+                  color: Colors.white70,
+                  letterSpacing: 1.1,
                 ),
               ),
-            ),
-          ],
+              SizedBox(height: 4.h),
+              Text(
+                '注册',
+                style: TextStyle(
+                  fontSize: 34.sp,
+                  fontWeight: FontWeight.w800,
+                  color: Colors.white,
+                  letterSpacing: 1.5,
+                ),
+              ),
+            ],
+          ),
         ),
-        SizedBox(height: 14.h),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: Text(
-            '创建账号后返回登录',
-            style: TextStyle(
-              fontSize: 12.sp,
-              color: Colors.white60,
-              height: 1.6,
+        Container(
+          padding: EdgeInsets.all(4.w),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(16.r),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(12.r),
+            child: Image.asset(
+              'assets/images/logo.png',
+              width: 56.w,
+              height: 56.w,
+              fit: BoxFit.cover,
             ),
           ),
         ),
@@ -365,15 +347,6 @@ class _ServerSettingsSheet extends GetView<RegisterController> {
                                 color: Colors.white,
                               ),
                             ),
-                            SizedBox(height: 4.h),
-                            Text(
-                              isManualEntryMode ? '注册时使用手动地址' : '关闭后自动扫描局域网',
-                              style: TextStyle(
-                                fontSize: 12.sp,
-                                color: Colors.white70,
-                                height: 1.5,
-                              ),
-                            ),
                           ],
                         ),
                       ),
@@ -495,11 +468,6 @@ class _ServerSettingsSheet extends GetView<RegisterController> {
                         ),
                       ),
                     ),
-                  ),
-                  SizedBox(height: 8.h),
-                  Text(
-                    '注册时将使用这里的地址。',
-                    style: TextStyle(fontSize: 12.sp, color: Colors.white54),
                   ),
                 ],
               ],
@@ -653,67 +621,6 @@ class _CredentialsFields extends GetView<RegisterController> {
         borderSide: const BorderSide(color: AppThemeColors.primary, width: 1.5),
       ),
       errorStyle: TextStyle(color: Colors.redAccent.shade100, fontSize: 12.sp),
-    );
-  }
-}
-
-class _RegisterStatusBanner extends GetView<RegisterController> {
-  const _RegisterStatusBanner();
-
-  @override
-  Widget build(BuildContext context) {
-    final isChecking = controller.isCheckingRegisterStatus.value;
-    final enabled = controller.registerEnabled.value;
-    final message = controller.registerStatusMessage.value ?? '将检查注册状态';
-
-    final Color accent = switch (enabled) {
-      true => const Color(0xFF21C47B),
-      false => const Color(0xFFFF8A65),
-      null => Colors.white70,
-    };
-
-    final IconData icon = isChecking
-        ? Icons.sync_rounded
-        : enabled == false
-        ? Icons.lock_outline_rounded
-        : Icons.info_outline_rounded;
-
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 180),
-      width: double.infinity,
-      padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 14.h),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.04),
-        borderRadius: BorderRadius.circular(16.r),
-        border: Border.all(color: accent.withValues(alpha: 0.45)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (isChecking)
-            SizedBox(
-              width: 18.w,
-              height: 18.w,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                valueColor: AlwaysStoppedAnimation<Color>(accent),
-              ),
-            )
-          else
-            Icon(icon, size: 18.sp, color: accent),
-          SizedBox(width: 10.w),
-          Expanded(
-            child: Text(
-              isChecking ? '检查中...' : message,
-              style: TextStyle(
-                fontSize: 12.sp,
-                color: Colors.white70,
-                height: 1.5,
-              ),
-            ),
-          ),
-        ],
-      ),
     );
   }
 }

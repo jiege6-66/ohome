@@ -111,8 +111,13 @@ class RegisterController extends GetxController {
         name: nameController.text.trim(),
         password: passwordController.text,
       );
-      await _rememberSuccessfulServer();
-      Get.snackbar('提示', '注册成功，请登录', duration: const Duration(seconds: 2));
+
+      try {
+        await _rememberSuccessfulServer();
+      } catch (_) {
+        // 记忆服务器失败不影响注册成功后的返回流程。
+      }
+
       Get.back<String>(result: nameController.text.trim());
     } finally {
       isLoading.value = false;

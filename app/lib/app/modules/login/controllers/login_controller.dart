@@ -108,6 +108,7 @@ class LoginController extends GetxController {
     final result = await Get.toNamed(Routes.REGISTER);
     if (result is String && result.trim().isNotEmpty) {
       nameController.text = result.trim();
+      Get.snackbar('提示', '注册成功，请登录', duration: const Duration(seconds: 2));
     }
     passwordController.clear();
     confirmPasswordController.clear();

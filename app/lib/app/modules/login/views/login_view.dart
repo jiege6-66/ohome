@@ -85,7 +85,7 @@ class LoginView extends GetView<LoginController> {
                                     const _Header(),
                                     SizedBox(height: 28.h),
                                     const _CredentialsFields(),
-                                    SizedBox(height: 32.h),
+                                    SizedBox(height: 28.h),
                                     const _SubmitButton(),
                                     SizedBox(height: 14.h),
                                     const _RegisterEntryButton(),
@@ -118,66 +118,50 @@ class _Header extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '欢迎回来',
-                    style: TextStyle(
-                      fontSize: 15.sp,
-                      fontWeight: FontWeight.w400,
-                      color: Colors.white70,
-                      letterSpacing: 1.1,
-                    ),
-                  ),
-                  SizedBox(height: 4.h),
-                  Text(
-                    '登录',
-                    style: TextStyle(
-                      fontSize: 34.sp,
-                      fontWeight: FontWeight.w800,
-                      color: Colors.white,
-                      letterSpacing: 1.5,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Container(
-              padding: EdgeInsets.all(4.w),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(16.r),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(12.r),
-                child: Image.asset(
-                  'assets/images/logo.png',
-                  width: 56.w,
-                  height: 56.w,
-                  fit: BoxFit.cover,
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '欢迎回来',
+                style: TextStyle(
+                  fontSize: 15.sp,
+                  fontWeight: FontWeight.w400,
+                  color: Colors.white70,
+                  letterSpacing: 1.1,
                 ),
               ),
-            ),
-          ],
+              SizedBox(height: 4.h),
+              Text(
+                '登录',
+                style: TextStyle(
+                  fontSize: 34.sp,
+                  fontWeight: FontWeight.w800,
+                  color: Colors.white,
+                  letterSpacing: 1.5,
+                ),
+              ),
+            ],
+          ),
         ),
-        SizedBox(height: 14.h),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: Text(
-            '输入账号继续使用',
-            style: TextStyle(
-              fontSize: 12.sp,
-              color: Colors.white60,
-              height: 1.6,
+        Container(
+          padding: EdgeInsets.all(4.w),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(16.r),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(12.r),
+            child: Image.asset(
+              'assets/images/logo.png',
+              width: 56.w,
+              height: 56.w,
+              fit: BoxFit.cover,
             ),
           ),
         ),
@@ -341,15 +325,6 @@ class _ServerSettingsSheet extends GetView<LoginController> {
                                 color: Colors.white,
                               ),
                             ),
-                            SizedBox(height: 4.h),
-                            Text(
-                              isManualEntryMode ? '登录时使用手动地址' : '关闭后自动扫描局域网',
-                              style: TextStyle(
-                                fontSize: 12.sp,
-                                color: Colors.white70,
-                                height: 1.5,
-                              ),
-                            ),
                           ],
                         ),
                       ),
@@ -471,11 +446,6 @@ class _ServerSettingsSheet extends GetView<LoginController> {
                         ),
                       ),
                     ),
-                  ),
-                  SizedBox(height: 8.h),
-                  Text(
-                    '登录时将使用这里的地址。',
-                    style: TextStyle(fontSize: 12.sp, color: Colors.white54),
                   ),
                 ],
               ],
