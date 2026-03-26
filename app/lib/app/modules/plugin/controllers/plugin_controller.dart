@@ -28,6 +28,7 @@ class PluginController extends GetxController {
   final appUpdateChecking = false.obs;
   final avatarUploading = false.obs;
   final profileUpdating = false.obs;
+  final quarkAdminMenuExpanded = false.obs;
 
   Rxn<UserModel> get user => _authService.user;
 
@@ -48,8 +49,18 @@ class PluginController extends GetxController {
     Get.toNamed(Routes.QUARK_SEARCH_SETTINGS);
   }
 
+  void openQuarkStreamSettings() {
+    if (!_ensureSuperAdmin()) return;
+    Get.toNamed(Routes.QUARK_STREAM_SETTINGS);
+  }
+
   void openQuarkSync() {
     Get.toNamed(Routes.QUARK_SYNC);
+  }
+
+  void toggleQuarkAdminMenu() {
+    if (!_ensureSuperAdmin()) return;
+    quarkAdminMenuExpanded.toggle();
   }
 
   Future<void> logout() async {

@@ -22,6 +22,8 @@ import '../modules/quark_login/bindings/quark_login_binding.dart';
 import '../modules/quark_login/views/quark_login_view.dart';
 import '../modules/quark_search_settings/bindings/quark_search_settings_binding.dart';
 import '../modules/quark_search_settings/views/quark_search_settings_view.dart';
+import '../modules/quark_stream_settings/bindings/quark_stream_settings_binding.dart';
+import '../modules/quark_stream_settings/views/quark_stream_settings_view.dart';
 import '../modules/quark_sync/bindings/quark_sync_binding.dart';
 import '../modules/quark_sync/views/quark_sync_view.dart';
 import '../modules/quark_transfer_tasks/bindings/quark_transfer_tasks_binding.dart';
@@ -109,6 +111,12 @@ class AppPages {
       name: _Paths.QUARK_SEARCH_SETTINGS,
       page: () => const QuarkSearchSettingsView(),
       binding: QuarkSearchSettingsBinding(),
+      middlewares: [AuthMiddleware(), SuperAdminMiddleware()],
+    ),
+    GetPage(
+      name: _Paths.QUARK_STREAM_SETTINGS,
+      page: () => const QuarkStreamSettingsView(),
+      binding: QuarkStreamSettingsBinding(),
       middlewares: [AuthMiddleware(), SuperAdminMiddleware()],
     ),
     GetPage(

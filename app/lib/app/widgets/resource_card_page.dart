@@ -453,41 +453,70 @@ class _ResourceCardPageState extends State<ResourceCardPage> {
   }) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            '排序方式',
-            style: TextStyle(
-              color: Colors.white70,
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-            ),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: const Color(0xFF101113),
+          borderRadius: BorderRadius.circular(18),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          child: Row(
+            children: [
+              const Text(
+                '排序方式',
+                style: TextStyle(
+                  color: Colors.white70,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const Spacer(),
+              ConstrainedBox(
+                constraints: const BoxConstraints(minWidth: 132, maxWidth: 168),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<WebdavListSortType>(
+                    value: currentSort,
+                    isDense: true,
+                    isExpanded: true,
+                    dropdownColor: const Color(0xFF1A1A1A),
+                    icon: const Icon(
+                      Icons.keyboard_arrow_down_rounded,
+                      color: Colors.white54,
+                    ),
+                    style: const TextStyle(
+                      color: Colors.white70,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    borderRadius: BorderRadius.circular(18),
+                    items: WebdavListSortType.values
+                        .map(
+                          (option) => DropdownMenuItem<WebdavListSortType>(
+                            value: option,
+                            child: Text(
+                              option.label,
+                              textAlign: TextAlign.right,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        )
+                        .toList(growable: false),
+                    onChanged: disabled
+                        ? null
+                        : (value) {
+                            if (value == null || value == currentSort) return;
+                            widget.controller.changeSort(value);
+                          },
+                  ),
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 8),
-          SizedBox(
-            height: 36,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              itemCount: WebdavListSortType.values.length,
-              separatorBuilder: (context, index) => const SizedBox(width: 8),
-              itemBuilder: (context, index) {
-                final option = WebdavListSortType.values[index];
-                final selected = option == currentSort;
-                return ChoiceChip(
-                  label: Text(option.label),
-                  selected: selected,
-                  showCheckmark: false,
-                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  visualDensity: VisualDensity.compact,
-                  onSelected: disabled || selected
-                      ? null
-                      : (_) => widget.controller.changeSort(option),
-                );
-              },
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }

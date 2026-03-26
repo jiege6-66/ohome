@@ -67,6 +67,20 @@ func (a *QuarkFs) StreamQuarkFile(c *gin.Context) {
 
 	isCast := c.Query("cast") == "true"
 	rangeHeader := c.GetHeader("Range")
+	if shouldRedirectQuarkStream(c) {
+		directURL, _, err := quarkFsService.GetDirectFileLink(c.Request.Context(), &pathDTO)
+		if err != nil {
+			utils.FailWithMessage(err.Error(), c)
+			return
+		}
+		if strings.TrimSpace(directURL) == "" {
+			utils.FailWithMessage("获取播放链接失败", c)
+			return
+		}
+		a.writeRedirectResponse(c, directURL)
+		return
+	}
+
 	if c.Request.Method == http.MethodHead {
 		meta, err := quarkFsService.DescribeFile(&pathDTO)
 		if err != nil {
@@ -91,6 +105,29 @@ func (a *QuarkFs) StreamQuarkFile(c *gin.Context) {
 	defer result.Body.Close()
 
 	a.writeStreamResponse(c, result, meta, isCast)
+}
+
+func shouldRedirectQuarkStream(c *gin.Context) bool {
+	mode := strings.ToLower(strings.TrimSpace(c.Query("mode")))
+	switch mode {
+	case "proxy", "native_proxy":
+		return false
+	case "redirect", "302", "302_redirect", "direct":
+		return true
+	}
+
+	switch service.GetQuarkStreamWebProxyMode() {
+	case "302_redirect":
+		return true
+	default:
+		return false
+	}
+}
+
+func (a *QuarkFs) writeRedirectResponse(c *gin.Context, directURL string) {
+	c.Header("Referrer-Policy", "no-referrer")
+	c.Header("Cache-Control", "max-age=0, no-cache, no-store, must-revalidate")
+	c.Redirect(http.StatusFound, directURL)
 }
 
 func (a *QuarkFs) writeStreamResponse(

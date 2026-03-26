@@ -417,6 +417,41 @@ func (s *QuarkFsService) StreamFile(ctx context.Context, pathDTO *dto.QuarkPathD
 	}, nil
 }
 
+func (s *QuarkFsService) GetDirectFileLink(ctx context.Context, pathDTO *dto.QuarkPathDTO) (string, QuarkProxyMeta, error) {
+	client, entry, filename, err := s.resolveFileForRead(pathDTO)
+	if err != nil {
+		return "", QuarkProxyMeta{}, err
+	}
+
+	link, err := s.resolveDirectPlayableLink(ctx, client, entry)
+	if err != nil {
+		return "", QuarkProxyMeta{}, err
+	}
+
+	return strings.TrimSpace(link.URL), QuarkProxyMeta{
+		Filename:  filename,
+		Size:      max(entry.Size, link.Size),
+		UpdatedAt: entry.UpdatedUnix(),
+	}, nil
+}
+
+func (s *QuarkFsService) resolveDirectPlayableLink(ctx context.Context, client *quarkClient, entry quarkDriveFile) (quarkFileLink, error) {
+	if client == nil {
+		return quarkFileLink{}, errors.New("夸克客户端未初始化")
+	}
+
+	if !entry.IsDir() && entry.Category == 1 && entry.Size > 0 {
+		link, err := client.getTranscodingLink(ctx, entry.Fid)
+		if err == nil && strings.TrimSpace(link.URL) != "" {
+			logQuarkWarnf("[quarkFs:stream] use transcoding redirect fid=%s size=%d", strings.TrimSpace(entry.Fid), entry.Size)
+			return link, nil
+		}
+		logQuarkWarnf("[quarkFs:stream] transcoding redirect fallback to download fid=%s err=%v", strings.TrimSpace(entry.Fid), err)
+	}
+
+	return client.getFileLink(ctx, entry.Fid)
+}
+
 func (s *QuarkFsService) DescribeFile(pathDTO *dto.QuarkPathDTO) (QuarkProxyMeta, error) {
 	_, entry, filename, err := s.resolveFileForRead(pathDTO)
 	if err != nil {

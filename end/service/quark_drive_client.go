@@ -144,6 +144,21 @@ type quarkFileLinkResponse struct {
 	} `json:"data"`
 }
 
+type quarkTranscodingLinkResponse struct {
+	Data struct {
+		VideoList []struct {
+			Resolution string `json:"resolution"`
+			VideoInfo  struct {
+				Size    int64  `json:"size"`
+				Format  string `json:"format"`
+				URL     string `json:"url"`
+				Success bool   `json:"success"`
+				Finish  bool   `json:"finish"`
+			} `json:"video_info"`
+		} `json:"video_list"`
+	} `json:"data"`
+}
+
 type quarkFileLink struct {
 	URL  string
 	Size int64
@@ -756,6 +771,54 @@ func (c *quarkClient) getFileLink(ctx context.Context, fid string) (quarkFileLin
 	}
 	cacheFileLink(fid, link, now)
 	return link, nil
+}
+
+func (c *quarkClient) getTranscodingLink(ctx context.Context, fid string) (quarkFileLink, error) {
+	link, err := c.requestTranscodingLink(ctx, fid)
+	if err == nil {
+		return link, nil
+	}
+
+	if strings.Contains(strings.ToLower(strings.TrimSpace(err.Error())), "plf_invalid") {
+		if warmErr := c.prepareTranscodingSession(ctx); warmErr == nil {
+			return c.requestTranscodingLink(ctx, fid)
+		}
+	}
+
+	return quarkFileLink{}, err
+}
+
+func (c *quarkClient) requestTranscodingLink(ctx context.Context, fid string) (quarkFileLink, error) {
+	resp, _, _, err := c.driveRequest(ctx, http.MethodPost, "/file/v2/play/project", nil, map[string]any{
+		"fid":         fid,
+		"resolutions": "low,normal,high,super,2k,4k",
+		"supports":    "fmp4_av,m3u8,dolby_vision",
+	})
+	if err != nil {
+		return quarkFileLink{}, err
+	}
+
+	var data quarkTranscodingLinkResponse
+	if err := json.Unmarshal(resp.Data, &data.Data); err != nil {
+		return quarkFileLink{}, err
+	}
+
+	for _, item := range data.Data.VideoList {
+		if strings.TrimSpace(item.VideoInfo.URL) == "" {
+			continue
+		}
+		return quarkFileLink{
+			URL:  strings.TrimSpace(item.VideoInfo.URL),
+			Size: item.VideoInfo.Size,
+		}, nil
+	}
+
+	return quarkFileLink{}, errors.New("获取转码播放链接失败")
+}
+
+func (c *quarkClient) prepareTranscodingSession(ctx context.Context) error {
+	_, _, _, err := c.driveRequest(ctx, http.MethodGet, "/config", nil, nil)
+	return err
 }
 
 func (c *quarkClient) openDownloadStream(ctx context.Context, downloadURL, rangeHeader string) (*http.Response, error) {

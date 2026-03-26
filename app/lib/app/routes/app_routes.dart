@@ -15,6 +15,7 @@ abstract class Routes {
   static const PLUGIN = _Paths.PLUGIN;
   static const QUARK_LOGIN = _Paths.QUARK_LOGIN;
   static const QUARK_SEARCH_SETTINGS = _Paths.QUARK_SEARCH_SETTINGS;
+  static const QUARK_STREAM_SETTINGS = _Paths.QUARK_STREAM_SETTINGS;
   static const QUARK_SYNC = _Paths.QUARK_SYNC;
   static const QUARK_TRANSFER_TASKS = _Paths.QUARK_TRANSFER_TASKS;
   static const SEARCH = _Paths.SEARCH;
@@ -42,6 +43,7 @@ abstract class _Paths {
   static const PLUGIN = '/plugin';
   static const QUARK_LOGIN = '/quark-login';
   static const QUARK_SEARCH_SETTINGS = '/quark-search-settings';
+  static const QUARK_STREAM_SETTINGS = '/quark-stream-settings';
   static const QUARK_SYNC = '/quark-sync';
   static const QUARK_TRANSFER_TASKS = '/quark-transfer-tasks';
   static const SEARCH = '/search';

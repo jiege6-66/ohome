@@ -14,13 +14,21 @@ const sensitiveConfigKeyQuarkSearchHTTPProxy = "quark_search_http_proxy"
 const sensitiveConfigKeyQuarkSearchHTTPSProxy = "quark_search_https_proxy"
 const sensitiveConfigKeyQuarkSearchChannels = "quark_search_channels"
 const sensitiveConfigKeyQuarkSearchEnabledPlugins = "quark_search_enabled_plugins"
+const sensitiveConfigKeyQuarkStreamWebProxyMode = "quark_fs_web_proxy_mode"
+const sensitiveConfigKeyQuarkStreamConcurrency = "quark_fs_concurrency"
+const sensitiveConfigKeyQuarkStreamPartSizeMB = "quark_fs_part_size_mb"
+const sensitiveConfigKeyQuarkStreamChunkMaxRetries = "quark_fs_chunk_max_retries"
 
 var sensitiveConfigKeys = map[string]struct{}{
-	sensitiveConfigKeyQuarkCookies:              {},
-	sensitiveConfigKeyQuarkSearchHTTPProxy:      {},
-	sensitiveConfigKeyQuarkSearchHTTPSProxy:     {},
-	sensitiveConfigKeyQuarkSearchChannels:       {},
-	sensitiveConfigKeyQuarkSearchEnabledPlugins: {},
+	sensitiveConfigKeyQuarkCookies:               {},
+	sensitiveConfigKeyQuarkSearchHTTPProxy:       {},
+	sensitiveConfigKeyQuarkSearchHTTPSProxy:      {},
+	sensitiveConfigKeyQuarkSearchChannels:        {},
+	sensitiveConfigKeyQuarkSearchEnabledPlugins:  {},
+	sensitiveConfigKeyQuarkStreamWebProxyMode:    {},
+	sensitiveConfigKeyQuarkStreamConcurrency:     {},
+	sensitiveConfigKeyQuarkStreamPartSizeMB:      {},
+	sensitiveConfigKeyQuarkStreamChunkMaxRetries: {},
 }
 
 type Config struct {

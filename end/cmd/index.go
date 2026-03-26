@@ -39,6 +39,9 @@ func Start() {
 	if err := service.EnsureDefaultQuarkSearchConfigs(); err != nil && global.Logger != nil {
 		global.Logger.Errorf("Ensure Quark Search Config Error: %s", err.Error())
 	}
+	if err := service.EnsureDefaultQuarkStreamConfigs(); err != nil && global.Logger != nil {
+		global.Logger.Errorf("Ensure Quark Stream Config Error: %s", err.Error())
+	}
 
 	var quarkTransferTaskService service.QuarkTransferTaskService
 	if err := quarkTransferTaskService.RecoverInterruptedTasks(); err != nil && global.Logger != nil {

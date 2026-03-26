@@ -72,20 +72,12 @@ class PluginView extends GetView<PluginController> {
                         onTap: controller.openUserManagement,
                       ),
                       SizedBox(height: 12.h),
-                      _SettingsMenuCard(
-                        icon: Icons.cookie_outlined,
-                        iconColor: const Color(0xFFFFB74D),
-                        title: '夸克登录',
-                        subtitle: '设置 quark_cookies 参数',
-                        onTap: controller.openQuarkLogin,
-                      ),
-                      SizedBox(height: 12.h),
-                      _SettingsMenuCard(
-                        icon: Icons.travel_explore_rounded,
-                        iconColor: const Color(0xFF64B5F6),
-                        title: '夸克搜索',
-                        subtitle: '配置 HTTP 代理、HTTPS 代理、TG 频道和启用插件',
-                        onTap: controller.openQuarkSearchSettings,
+                      _QuarkAdminMenuCard(
+                        expanded: controller.quarkAdminMenuExpanded.value,
+                        onTap: controller.toggleQuarkAdminMenu,
+                        onLoginTap: controller.openQuarkLogin,
+                        onSearchTap: controller.openQuarkSearchSettings,
+                        onStreamTap: controller.openQuarkStreamSettings,
                       ),
                       SizedBox(height: 12.h),
                     ],
@@ -272,6 +264,219 @@ class PluginView extends GetView<PluginController> {
         ),
       );
     });
+  }
+}
+
+class _QuarkAdminMenuCard extends StatelessWidget {
+  const _QuarkAdminMenuCard({
+    required this.expanded,
+    required this.onTap,
+    required this.onLoginTap,
+    required this.onSearchTap,
+    required this.onStreamTap,
+  });
+
+  final bool expanded;
+  final VoidCallback? onTap;
+  final VoidCallback? onLoginTap;
+  final VoidCallback? onSearchTap;
+  final VoidCallback? onStreamTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: const Color(0xFF1A1A1A),
+      borderRadius: BorderRadius.circular(22.r),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(22.r),
+        child: Ink(
+          padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 14.h),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(22.r),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+          ),
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 40.w,
+                    height: 40.w,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF64B5F6).withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(14.r),
+                    ),
+                    child: Icon(
+                      Icons.folder_special_outlined,
+                      color: const Color(0xFF64B5F6),
+                      size: 22.w,
+                    ),
+                  ),
+                  SizedBox(width: 14.w),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '夸克配置',
+                          style: TextStyle(
+                            fontSize: 15.sp,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white,
+                          ),
+                        ),
+                        SizedBox(height: 4.h),
+                        Text(
+                          '统一管理夸克登录、搜索和播放设置',
+                          style: TextStyle(
+                            fontSize: 12.sp,
+                            color: Colors.white54,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  AnimatedRotation(
+                    turns: expanded ? 0.5 : 0,
+                    duration: const Duration(milliseconds: 200),
+                    child: Icon(
+                      Icons.keyboard_arrow_down_rounded,
+                      size: 22.w,
+                      color: Colors.white38,
+                    ),
+                  ),
+                ],
+              ),
+              AnimatedSize(
+                duration: const Duration(milliseconds: 220),
+                curve: Curves.easeInOut,
+                child: expanded
+                    ? Padding(
+                        padding: EdgeInsets.only(top: 14.h),
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.04),
+                            borderRadius: BorderRadius.circular(18.r),
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.05),
+                            ),
+                          ),
+                          child: Column(
+                            children: [
+                              _SettingsSubMenuTile(
+                                icon: Icons.cookie_outlined,
+                                iconColor: const Color(0xFFFFB74D),
+                                title: '夸克登录',
+                                subtitle: '设置 quark_cookies 参数',
+                                onTap: onLoginTap,
+                              ),
+                              _buildDivider(),
+                              _SettingsSubMenuTile(
+                                icon: Icons.travel_explore_rounded,
+                                iconColor: const Color(0xFF64B5F6),
+                                title: '夸克搜索',
+                                subtitle: '配置 HTTP 代理、HTTPS 代理、TG 频道和启用插件',
+                                onTap: onSearchTap,
+                              ),
+                              _buildDivider(),
+                              _SettingsSubMenuTile(
+                                icon: Icons.smart_display_outlined,
+                                iconColor: const Color(0xFFBA68C8),
+                                title: '夸克播放',
+                                subtitle: '配置 302 / 本地代理、并发数、分片大小和重试次数',
+                                onTap: onStreamTap,
+                              ),
+                            ],
+                          ),
+                        ),
+                      )
+                    : const SizedBox.shrink(),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDivider() {
+    return Divider(
+      height: 1.h,
+      thickness: 1,
+      color: Colors.white.withValues(alpha: 0.05),
+      indent: 16.w,
+      endIndent: 16.w,
+    );
+  }
+}
+
+class _SettingsSubMenuTile extends StatelessWidget {
+  const _SettingsSubMenuTile({
+    required this.icon,
+    required this.iconColor,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final Color iconColor;
+  final String title;
+  final String subtitle;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18.r),
+        child: Padding(
+          padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 13.h),
+          child: Row(
+            children: [
+              Container(
+                width: 36.w,
+                height: 36.w,
+                decoration: BoxDecoration(
+                  color: iconColor.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(12.r),
+                ),
+                child: Icon(icon, color: iconColor, size: 20.w),
+              ),
+              SizedBox(width: 12.w),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        fontSize: 14.sp,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                      ),
+                    ),
+                    SizedBox(height: 4.h),
+                    Text(
+                      subtitle,
+                      style: TextStyle(fontSize: 11.sp, color: Colors.white54),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                Icons.chevron_right_rounded,
+                size: 20.w,
+                color: Colors.white38,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 
