@@ -402,16 +402,22 @@ class _PlayerViewState extends State<PlayerView> with WidgetsBindingObserver {
         children: [
           Icon(icon, size: 16.sp, color: Colors.white70),
           SizedBox(width: 6.w),
-          RichText(
-            textAlign: TextAlign.center,
-            text: TextSpan(
-              children: [
-                TextSpan(
-                  text: '$label ',
-                  style: textStyle.copyWith(color: Colors.white70),
-                ),
-                TextSpan(text: value, style: textStyle),
-              ],
+          ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: 160.w),
+            child: Text.rich(
+              TextSpan(
+                children: [
+                  TextSpan(
+                    text: '$label ',
+                    style: textStyle.copyWith(color: Colors.white70),
+                  ),
+                  TextSpan(text: value, style: textStyle),
+                ],
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              softWrap: false,
+              textAlign: TextAlign.center,
             ),
           ),
         ],
@@ -1096,6 +1102,83 @@ class _PlayerViewState extends State<PlayerView> with WidgetsBindingObserver {
     );
   }
 
+  void _showSubtitleTrackSheet(
+    BuildContext context, {
+    bool fullscreenDrawer = false,
+  }) {
+    if (!controller.canSwitchSubtitleTrack) {
+      Get.snackbar('提示', '当前视频未发现可切换字幕');
+      return;
+    }
+
+    Widget buildBody(BuildContext ctx, {bool compact = false}) {
+      return Obx(() {
+        final options = controller.subtitleTrackOptions;
+        final current = controller.currentSubtitleTrack.value;
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: options
+              .map((track) {
+                final selected = current != null
+                    ? current == track
+                    : track.id == 'auto';
+                return _buildSheetOptionTile(
+                  context: ctx,
+                  title: controller.subtitleTrackTitle(track),
+                  subtitle: controller.subtitleTrackSubtitle(track),
+                  selected: selected,
+                  titleFontSize: compact ? 6.sp : null,
+                  subtitleFontSize: compact ? 4.sp : null,
+                  trailingIconSize: compact ? 10.sp : null,
+                  onTap: () {
+                    Navigator.of(ctx).pop();
+                    unawaited(controller.setSubtitleTrackSelection(track));
+                  },
+                );
+              })
+              .toList(growable: false),
+        );
+      });
+    }
+
+    Widget buildContent(BuildContext ctx) {
+      return Obx(() {
+        final current = controller.currentSubtitleTrackDisplayLabel;
+        return _buildStandardBottomSheet(
+          context: ctx,
+          title: '字幕',
+          subtitle: '当前：$current',
+          child: buildBody(ctx),
+        );
+      });
+    }
+
+    if (fullscreenDrawer) {
+      _showFullscreenSideDrawer(
+        context,
+        childBuilder: (ctx) => _buildFullscreenDrawerContainer(
+          child: Obx(() {
+            final current = controller.currentSubtitleTrackDisplayLabel;
+            return _buildFullscreenDrawerSection(
+              title: '字幕',
+              subtitle: '当前：$current',
+              child: buildBody(ctx, compact: true),
+            );
+          }),
+        ),
+      );
+      return;
+    }
+
+    showModalBottomSheet<void>(
+      context: context,
+      useRootNavigator: true,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => buildContent(ctx),
+    );
+  }
+
   void _showPlaybackProxyModeSheet(
     BuildContext context, {
     bool fullscreenDrawer = false,
@@ -1255,6 +1338,8 @@ class _PlayerViewState extends State<PlayerView> with WidgetsBindingObserver {
               SizedBox(height: 15.h),
               Text(
                 title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   color: Colors.white,
                   fontSize: titleFontSize ?? 16,
@@ -1266,6 +1351,8 @@ class _PlayerViewState extends State<PlayerView> with WidgetsBindingObserver {
                 SizedBox(height: 2.h),
                 Text(
                   subtitle,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: Colors.white60,
                     fontSize: subtitleFontSize ?? 5.sp,
@@ -1307,6 +1394,8 @@ class _PlayerViewState extends State<PlayerView> with WidgetsBindingObserver {
                     children: [
                       Text(
                         title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           color: Colors.white,
                           fontSize: 6.sp,
@@ -1316,6 +1405,8 @@ class _PlayerViewState extends State<PlayerView> with WidgetsBindingObserver {
                       SizedBox(height: 2.h),
                       Text(
                         subtitle,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           color: Colors.white38,
                           fontSize: 4.5.sp,
@@ -1395,6 +1486,19 @@ class _PlayerViewState extends State<PlayerView> with WidgetsBindingObserver {
                     _showAudioTrackSheet(state.context, fullscreenDrawer: true);
                   },
                 ),
+              if (controller.canSwitchSubtitleTrack)
+                _buildFullscreenSettingRow(
+                  icon: Icons.subtitles_rounded,
+                  title: '字幕',
+                  subtitle: controller.currentSubtitleTrackDisplayLabel,
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    _showSubtitleTrackSheet(
+                      state.context,
+                      fullscreenDrawer: true,
+                    );
+                  },
+                ),
               _buildFullscreenSettingRow(
                 icon: Icons.speed_rounded,
                 title: '倍速',
@@ -1469,6 +1573,8 @@ class _PlayerViewState extends State<PlayerView> with WidgetsBindingObserver {
                       children: [
                         Text(
                           title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             color: Colors.white,
                             fontSize: titleFontSize ?? 16.sp,
@@ -1479,6 +1585,8 @@ class _PlayerViewState extends State<PlayerView> with WidgetsBindingObserver {
                           SizedBox(height: 4.h),
                           Text(
                             subtitle,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               color: Colors.white60,
                               fontSize: subtitleFontSize ?? 12.sp,
@@ -1539,6 +1647,8 @@ class _PlayerViewState extends State<PlayerView> with WidgetsBindingObserver {
                     children: [
                       Text(
                         title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           color: Colors.white,
                           fontSize: titleFontSize ?? 14,
@@ -1549,6 +1659,8 @@ class _PlayerViewState extends State<PlayerView> with WidgetsBindingObserver {
                         SizedBox(height: 4.h),
                         Text(
                           subtitle,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             color: Colors.white60,
                             fontSize: subtitleFontSize ?? 12,
@@ -1977,6 +2089,15 @@ class _PlayerViewState extends State<PlayerView> with WidgetsBindingObserver {
                                     value: controller
                                         .currentAudioTrackDisplayLabel,
                                     onTap: () => _showAudioTrackSheet(context),
+                                  ),
+                                if (controller.canSwitchSubtitleTrack)
+                                  _buildInfoPill(
+                                    icon: Icons.subtitles_rounded,
+                                    label: '字幕',
+                                    value: controller
+                                        .currentSubtitleTrackDisplayLabel,
+                                    onTap: () =>
+                                        _showSubtitleTrackSheet(context),
                                   ),
                                 _buildInfoPill(
                                   icon: Icons.speed_rounded,

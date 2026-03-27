@@ -70,6 +70,9 @@ class PlayerController extends GetxController {
   final RxBool isLoadingPlaylist = false.obs;
   final availableAudioTracks = <AudioTrack>[].obs;
   final Rxn<AudioTrack> currentAudioTrack = Rxn<AudioTrack>();
+  final availableSubtitleTracks = <SubtitleTrack>[].obs;
+  final externalSubtitleTracks = <SubtitleTrack>[].obs;
+  final Rxn<SubtitleTrack> currentSubtitleTrack = Rxn<SubtitleTrack>();
   final RxString globalPlaybackProxyMode = _defaultPlaybackProxyMode.obs;
   final RxnString currentPlaybackProxyModeOverride = RxnString();
 
@@ -90,6 +93,7 @@ class PlayerController extends GetxController {
   StreamSubscription<VideoParams>? _videoParamsSubscription;
   StreamSubscription<Track>? _trackSubscription;
   StreamSubscription<Tracks>? _tracksSubscription;
+  List<WebdavFileEntry> _folderEntries = const <WebdavFileEntry>[];
   String? _folderPath;
   String? _resumeEpisodePath;
   Duration? _resumePosition;
@@ -111,6 +115,7 @@ class PlayerController extends GetxController {
   Timer? _castProgressTimer;
   Duration? _lastCastPersistedPosition;
   Future<void>? _globalPlaybackProxyModeFuture;
+  SubtitleTrack? _subtitleTrackBeforeCasting;
 
   bool get isPlayletMode => _applicationType.trim().toLowerCase() == 'playlet';
   bool get isCasting => _castService.isCasting.value;
@@ -186,6 +191,76 @@ class PlayerController extends GetxController {
     return audioTrackSubtitle(track);
   }
 
+  List<SubtitleTrack> get subtitleTrackOptions {
+    final visible = <SubtitleTrack>[];
+    var hasAuto = false;
+    var hasNo = false;
+    final seen = <String>{};
+
+    void addTrack(SubtitleTrack track) {
+      final key =
+          '${track.uri
+              ? 'uri'
+              : track.data
+              ? 'data'
+              : 'id'}:${track.id}';
+      if (!seen.add(key)) return;
+      switch (track.id) {
+        case 'auto':
+          hasAuto = true;
+          break;
+        case 'no':
+          hasNo = true;
+          break;
+        default:
+          visible.add(track);
+          break;
+      }
+    }
+
+    for (final track in availableSubtitleTracks) {
+      addTrack(track);
+    }
+    for (final track in externalSubtitleTracks) {
+      addTrack(track);
+    }
+
+    final selected = currentSubtitleTrack.value;
+    final includeAuto =
+        hasAuto ||
+        visible.isNotEmpty ||
+        selected?.id == SubtitleTrack.auto().id;
+    final includeNo =
+        hasNo || visible.isNotEmpty || selected?.id == SubtitleTrack.no().id;
+
+    return <SubtitleTrack>[
+      if (includeAuto) SubtitleTrack.auto(),
+      ...visible,
+      if (includeNo) SubtitleTrack.no(),
+    ];
+  }
+
+  bool get canSwitchSubtitleTrack =>
+      !isCasting && subtitleTrackOptions.length > 1;
+
+  String get currentSubtitleTrackDisplayLabel {
+    final track = currentSubtitleTrack.value;
+    if (track != null) {
+      return subtitleTrackTitle(track);
+    }
+    final options = subtitleTrackOptions;
+    if (options.isNotEmpty) {
+      return subtitleTrackTitle(options.first);
+    }
+    return '默认';
+  }
+
+  String get currentSubtitleTrackDisplaySubtitle {
+    final track = currentSubtitleTrack.value;
+    if (track == null) return '';
+    return subtitleTrackSubtitle(track);
+  }
+
   String? get currentCastUrl {
     final current = _currentEpisode;
     if (current == null) return null;
@@ -248,9 +323,11 @@ class PlayerController extends GetxController {
     });
     _trackSubscription = player.stream.track.listen((track) {
       _syncSelectedAudioTrack(track.audio);
+      _syncSelectedSubtitleTrack(track.subtitle);
     });
     _tracksSubscription = player.stream.tracks.listen((tracks) {
       _syncAvailableAudioTracks(tracks.audio);
+      _syncAvailableSubtitleTracks(tracks.subtitle);
     });
     _ready = true;
     if (episodes.isNotEmpty) {
@@ -349,6 +426,7 @@ class PlayerController extends GetxController {
       await player.stop();
     } catch (_) {}
     _resetAudioTrackState();
+    _resetSubtitleTrackState();
     unawaited(WakelockPlus.disable());
   }
 
@@ -446,6 +524,7 @@ class PlayerController extends GetxController {
   }
 
   Future<void> _enterCastingLocalStandby() async {
+    _subtitleTrackBeforeCasting = currentSubtitleTrack.value;
     await stopSpeedBoost();
     _lastCastPersistedPosition = null;
     _startCastProgressPolling();
@@ -457,31 +536,46 @@ class PlayerController extends GetxController {
 
   Future<void> _restoreLocalPlaybackAfterCasting() async {
     final episode = _currentEpisode;
-    if (episode == null) return;
+    if (episode == null) {
+      _subtitleTrackBeforeCasting = null;
+      return;
+    }
     await _ensureSkipSettingsLoaded();
 
     final url = _episodeUrl(episode);
-    if (url == null || url.isEmpty) return;
+    if (url == null || url.isEmpty) {
+      _subtitleTrackBeforeCasting = null;
+      return;
+    }
 
     final episodePath = episode.path?.trim();
     final intro = skipIntro.value;
+    final subtitleToApply = await _resolveSubtitleTrackForEpisode(
+      episode,
+      explicitTrack: _subtitleTrackBeforeCasting,
+    );
 
     try {
       _openingEpisodePath = episodePath;
       _openingEpisodeUrl = url;
       await player.stop();
       _resetAudioTrackState();
+      _resetSubtitleTrackState();
       _currentEpisodePath = episodePath;
       _currentEpisodeUrl = url;
       _lastPersistedPosition = null;
       _outroSkipTriggered = false;
       _pendingSeek = intro > Duration.zero ? intro : null;
       await player.open(Media(url), play: false);
+      if (subtitleToApply != null) {
+        await player.setSubtitleTrack(subtitleToApply);
+      }
     } catch (_) {
       Get.snackbar('播放失败', '当前视频恢复失败，请重试');
     } finally {
       _openingEpisodePath = null;
       _openingEpisodeUrl = null;
+      _subtitleTrackBeforeCasting = null;
     }
   }
 
@@ -522,6 +616,18 @@ class PlayerController extends GetxController {
       await player.setAudioTrack(track);
     } catch (_) {
       Get.snackbar('切换失败', '当前音轨切换失败，请稍后重试');
+    }
+  }
+
+  Future<void> setSubtitleTrackSelection(SubtitleTrack track) async {
+    if (isCasting) {
+      Get.snackbar('提示', '投屏时暂不支持切换本地字幕');
+      return;
+    }
+    try {
+      await player.setSubtitleTrack(track);
+    } catch (_) {
+      Get.snackbar('切换失败', '当前字幕切换失败，请稍后重试');
     }
   }
 
@@ -567,6 +673,61 @@ class PlayerController extends GetxController {
     }
     if (track.isDefault == true) {
       parts.add('默认');
+    }
+    return parts.join(' · ');
+  }
+
+  String subtitleTrackTitle(SubtitleTrack track) {
+    switch (track.id) {
+      case 'auto':
+        return '自动';
+      case 'no':
+        return '关闭字幕';
+    }
+    final rawTitle = track.title?.trim() ?? '';
+    if (rawTitle.isNotEmpty) return rawTitle;
+    final language = _subtitleLanguageLabel(track.language);
+    if (language.isNotEmpty) return language;
+    final codec = track.codec?.trim() ?? '';
+    if (codec.isNotEmpty) return codec.toUpperCase();
+    if (track.uri || track.data) {
+      final fileTitle = _titleFromPath(track.id);
+      if (fileTitle.isNotEmpty) return fileTitle;
+    }
+    return '字幕';
+  }
+
+  String subtitleTrackSubtitle(SubtitleTrack track) {
+    if (track.id == 'auto') {
+      return '自动选择默认字幕';
+    }
+    if (track.id == 'no') {
+      return '关闭当前视频字幕显示';
+    }
+
+    final parts = <String>[];
+    if (track.uri) {
+      parts.add('外挂字幕');
+    } else if (track.data) {
+      parts.add('临时字幕');
+    }
+    final language = _subtitleLanguageLabel(track.language);
+    final title = track.title?.trim() ?? '';
+    if (language.isNotEmpty && language != title) {
+      parts.add(language);
+    }
+    final codec = track.codec?.trim() ?? '';
+    if (codec.isNotEmpty) {
+      parts.add(codec.toUpperCase());
+    }
+    if (track.isDefault == true) {
+      parts.add('默认');
+    }
+    if (track.uri) {
+      final ext = _extensionFromPath(track.id);
+      if (ext.isNotEmpty) {
+        parts.add(ext.toUpperCase());
+      }
     }
     return parts.join(' · ');
   }
@@ -726,6 +887,7 @@ class PlayerController extends GetxController {
     bool forceReopen = false,
     Duration? startPosition,
     bool clearResume = false,
+    SubtitleTrack? subtitleTrackOverride,
   }) async {
     await _ensureGlobalPlaybackProxyModeLoaded();
     if (index < 0 || index >= episodes.length) return;
@@ -790,6 +952,10 @@ class PlayerController extends GetxController {
     if (intro > Duration.zero && pendingSeek < intro) {
       pendingSeek = intro;
     }
+    final subtitleToApply = await _resolveSubtitleTrackForEpisode(
+      episode,
+      explicitTrack: subtitleTrackOverride,
+    );
 
     if (!forceReopen && _shouldSkipDuplicateOpen(index, episodePath, url)) {
       currentIndex.value = index;
@@ -805,12 +971,16 @@ class PlayerController extends GetxController {
       _openingEpisodeUrl = url;
       await player.stop();
       _resetAudioTrackState();
+      _resetSubtitleTrackState();
       _currentEpisodePath = episodePath;
       _currentEpisodeUrl = url;
       _lastPersistedPosition = null;
       _outroSkipTriggered = false;
       _pendingSeek = pendingSeek > Duration.zero ? pendingSeek : null;
       await player.open(Media(url), play: true);
+      if (subtitleToApply != null) {
+        await player.setSubtitleTrack(subtitleToApply);
+      }
       currentIndex.value = index;
     } catch (_) {
       Get.snackbar('播放失败', '请稍后重试');
@@ -876,6 +1046,9 @@ class PlayerController extends GetxController {
     isLoadingPlaylist.value = false;
     currentPlaybackProxyModeOverride.value = null;
     _resetAudioTrackState();
+    _resetSubtitleTrackState(clearExternalOptions: true);
+    _folderEntries = const <WebdavFileEntry>[];
+    _subtitleTrackBeforeCasting = null;
 
     final applicationType = args['applicationType'];
     if (applicationType is String && applicationType.trim().isNotEmpty) {
@@ -989,6 +1162,7 @@ class PlayerController extends GetxController {
         path: folder,
       );
       if (_routeArgsVersion != version) return;
+      _folderEntries = List<WebdavFileEntry>.unmodifiable(files);
 
       final nextEpisodes = _buildEpisodesFromEntries(files);
       episodes.assignAll(nextEpisodes);
@@ -1294,10 +1468,41 @@ class PlayerController extends GetxController {
     }
   }
 
+  void _syncSelectedSubtitleTrack(SubtitleTrack track) {
+    if (track.id == 'auto' &&
+        availableSubtitleTracks.isEmpty &&
+        externalSubtitleTracks.isEmpty &&
+        currentSubtitleTrack.value == null) {
+      return;
+    }
+    currentSubtitleTrack.value = _findMatchingSubtitleTrack(track) ?? track;
+  }
+
+  void _syncAvailableSubtitleTracks(List<SubtitleTrack> tracks) {
+    availableSubtitleTracks.assignAll(_dedupeSubtitleTracks(tracks));
+    final selected = currentSubtitleTrack.value;
+    if (selected != null) {
+      currentSubtitleTrack.value =
+          _findMatchingSubtitleTrack(selected) ?? selected;
+    }
+  }
+
   AudioTrack? _findMatchingAudioTrack(AudioTrack track) {
     for (final item in availableAudioTracks) {
       if (item == track) return item;
       if (item.id == track.id && item.uri == track.uri) return item;
+    }
+    return null;
+  }
+
+  SubtitleTrack? _findMatchingSubtitleTrack(SubtitleTrack track) {
+    for (final item in subtitleTrackOptions) {
+      if (item == track) return item;
+      if (item.id == track.id &&
+          item.uri == track.uri &&
+          item.data == track.data) {
+        return item;
+      }
     }
     return null;
   }
@@ -1313,9 +1518,33 @@ class PlayerController extends GetxController {
     return result;
   }
 
+  List<SubtitleTrack> _dedupeSubtitleTracks(List<SubtitleTrack> tracks) {
+    final result = <SubtitleTrack>[];
+    final seen = <String>{};
+    for (final track in tracks) {
+      final key =
+          '${track.uri
+              ? 'uri'
+              : track.data
+              ? 'data'
+              : 'id'}:${track.id}';
+      if (!seen.add(key)) continue;
+      result.add(track);
+    }
+    return result;
+  }
+
   void _resetAudioTrackState() {
     availableAudioTracks.clear();
     currentAudioTrack.value = null;
+  }
+
+  void _resetSubtitleTrackState({bool clearExternalOptions = false}) {
+    availableSubtitleTracks.clear();
+    currentSubtitleTrack.value = null;
+    if (clearExternalOptions) {
+      externalSubtitleTracks.clear();
+    }
   }
 
   void _handlePositionUpdate(Duration position) {
@@ -1424,11 +1653,13 @@ class PlayerController extends GetxController {
 
     final wasPlaying = player.state.playing;
     final position = player.state.position;
+    final subtitleTrack = currentSubtitleTrack.value;
     await playAt(
       index,
       forceReopen: true,
       startPosition: position,
       clearResume: true,
+      subtitleTrackOverride: subtitleTrack,
     );
     if (!wasPlaying) {
       try {
@@ -1583,6 +1814,155 @@ class PlayerController extends GetxController {
     }
   }
 
+  static String _subtitleLanguageLabel(String? raw) {
+    return _audioLanguageLabel(raw);
+  }
+
+  Future<List<WebdavFileEntry>> _ensureFolderEntriesLoaded() async {
+    final folder = _folderPath;
+    if (folder == null || folder.trim().isEmpty) {
+      _folderEntries = const <WebdavFileEntry>[];
+      return _folderEntries;
+    }
+    if (_folderEntries.isNotEmpty) {
+      return _folderEntries;
+    }
+    try {
+      final files = await _webdavApi.fetchFileList(
+        applicationType: _applicationType,
+        path: folder,
+      );
+      _folderEntries = List<WebdavFileEntry>.unmodifiable(files);
+    } catch (error) {
+      Get.log('load folder entries failed: $error');
+      _folderEntries = const <WebdavFileEntry>[];
+    }
+    return _folderEntries;
+  }
+
+  Future<SubtitleTrack?> _resolveSubtitleTrackForEpisode(
+    Episode episode, {
+    SubtitleTrack? explicitTrack,
+  }) async {
+    final candidates = await _buildExternalSubtitleCandidates(episode);
+    externalSubtitleTracks.assignAll(
+      candidates.map((candidate) => candidate.track).toList(growable: false),
+    );
+
+    if (explicitTrack != null) {
+      if (explicitTrack.id == SubtitleTrack.auto().id) {
+        return null;
+      }
+      return explicitTrack;
+    }
+
+    if (candidates.isEmpty) return null;
+    final best = candidates.first;
+    if (best.score < 900) return null;
+    return best.track;
+  }
+
+  Future<List<_ExternalSubtitleCandidate>> _buildExternalSubtitleCandidates(
+    Episode episode,
+  ) async {
+    final entries = await _ensureFolderEntriesLoaded();
+    if (entries.isEmpty) return const <_ExternalSubtitleCandidate>[];
+
+    final subtitleEntries = entries
+        .where(_isSubtitleEntry)
+        .toList(growable: false);
+    if (subtitleEntries.isEmpty) {
+      return const <_ExternalSubtitleCandidate>[];
+    }
+
+    final episodeTitle = _titleFromPath(episode.path ?? episode.title);
+    final episodeBase = _baseNameWithoutExtension(episodeTitle);
+    final candidates = subtitleEntries
+        .map((entry) {
+          final score = _subtitleMatchScore(
+            episodeBase,
+            _baseNameWithoutExtension(entry.name),
+          );
+          return _ExternalSubtitleCandidate(
+            track: SubtitleTrack.uri(
+              _resolveEntryStreamUrl(entry),
+              title: entry.name,
+              language: _guessSubtitleLanguage(entry.name),
+            ),
+            score: score,
+          );
+        })
+        .toList(growable: false);
+
+    candidates.sort((left, right) {
+      final scoreCompare = right.score.compareTo(left.score);
+      if (scoreCompare != 0) return scoreCompare;
+      return (left.track.title ?? '').toLowerCase().compareTo(
+        (right.track.title ?? '').toLowerCase(),
+      );
+    });
+    return candidates;
+  }
+
+  bool _isSubtitleEntry(WebdavFileEntry entry) {
+    if (entry.isDir) return false;
+    final lower = entry.name.trim().toLowerCase();
+    return _subtitleExtensions.any(lower.endsWith);
+  }
+
+  static int _subtitleMatchScore(String episodeBase, String subtitleBase) {
+    final episode = _normalizeSubtitleMatchKey(episodeBase);
+    final subtitle = _normalizeSubtitleMatchKey(subtitleBase);
+    if (episode.isEmpty || subtitle.isEmpty) return 0;
+    if (subtitle == episode) return 1000;
+    if (subtitle.startsWith(episode)) return 920;
+    if (subtitle.contains(episode)) return 760;
+    return 0;
+  }
+
+  static String _normalizeSubtitleMatchKey(String value) {
+    return value.trim().toLowerCase().replaceAll(RegExp(r'[^a-z0-9一-鿿]+'), '');
+  }
+
+  static String _baseNameWithoutExtension(String value) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) return '';
+    final dot = trimmed.lastIndexOf('.');
+    if (dot <= 0) return trimmed;
+    return trimmed.substring(0, dot);
+  }
+
+  static String _extensionFromPath(String value) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) return '';
+    final dot = trimmed.lastIndexOf('.');
+    if (dot < 0 || dot == trimmed.length - 1) return '';
+    return trimmed.substring(dot + 1);
+  }
+
+  static String _guessSubtitleLanguage(String fileName) {
+    final lower = fileName.trim().toLowerCase();
+    if (lower.contains('.zh') ||
+        lower.contains('.chs') ||
+        lower.contains('.cht') ||
+        lower.contains('.chi') ||
+        lower.contains('.cn')) {
+      return 'zh';
+    }
+    if (lower.contains('.en') ||
+        lower.contains('.eng') ||
+        lower.contains('.us')) {
+      return 'en';
+    }
+    if (lower.contains('.ja') || lower.contains('.jpn')) {
+      return 'ja';
+    }
+    if (lower.contains('.ko') || lower.contains('.kor')) {
+      return 'ko';
+    }
+    return '';
+  }
+
   static const List<String> _videoExtensions = <String>[
     '.mp4',
     '.mkv',
@@ -1592,6 +1972,13 @@ class PlayerController extends GetxController {
     '.wmv',
     '.flv',
     '.webm',
+  ];
+  static const List<String> _subtitleExtensions = <String>[
+    '.srt',
+    '.ass',
+    '.ssa',
+    '.vtt',
+    '.sub',
   ];
   static const String _webProxyModeKey = 'quark_fs_web_proxy_mode';
   static const String _defaultPlaybackProxyMode = 'native_proxy';
@@ -1614,6 +2001,13 @@ class PlayerController extends GetxController {
     unawaited(WakelockPlus.disable());
     super.onClose();
   }
+}
+
+class _ExternalSubtitleCandidate {
+  const _ExternalSubtitleCandidate({required this.track, required this.score});
+
+  final SubtitleTrack track;
+  final int score;
 }
 
 class Episode {
