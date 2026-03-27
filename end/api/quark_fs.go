@@ -116,12 +116,7 @@ func shouldRedirectQuarkStream(c *gin.Context) bool {
 		return true
 	}
 
-	switch service.GetQuarkStreamWebProxyMode() {
-	case "302_redirect":
-		return true
-	default:
-		return false
-	}
+	return false
 }
 
 func (a *QuarkFs) writeRedirectResponse(c *gin.Context, directURL string) {

@@ -110,6 +110,7 @@ class PlayerController extends GetxController {
   bool _blockPlaybackOnOpen = false;
   Timer? _castProgressTimer;
   Duration? _lastCastPersistedPosition;
+  Future<void>? _globalPlaybackProxyModeFuture;
 
   bool get isPlayletMode => _applicationType.trim().toLowerCase() == 'playlet';
   bool get isCasting => _castService.isCasting.value;
@@ -216,7 +217,7 @@ class PlayerController extends GetxController {
     _progressStorage =
         _providedProgressStorage ??
         PlaybackProgressStorage(applicationType: _applicationType);
-    unawaited(_loadGlobalPlaybackProxyMode());
+    _globalPlaybackProxyModeFuture = _loadGlobalPlaybackProxyMode();
     handleRouteArguments(Get.arguments);
   }
 
@@ -258,6 +259,7 @@ class PlayerController extends GetxController {
   }
 
   Future<void> _startInitialPlayback() async {
+    await _ensureGlobalPlaybackProxyModeLoaded();
     await _configurePlayerIfNeeded();
     if (isCasting) {
       await stopPlayback();
@@ -725,6 +727,7 @@ class PlayerController extends GetxController {
     Duration? startPosition,
     bool clearResume = false,
   }) async {
+    await _ensureGlobalPlaybackProxyModeLoaded();
     if (index < 0 || index >= episodes.length) return;
     await _ensureSkipSettingsLoaded();
 
@@ -820,19 +823,17 @@ class PlayerController extends GetxController {
   String? _episodeUrl(Episode episode) {
     final path = episode.path?.trim();
     final url = episode.url?.trim();
+    final playbackMode = effectivePlaybackProxyMode;
     if (url != null && url.isNotEmpty) {
       if (_isLocalProxyStreamUrl(url)) {
-        return _applyPlaybackProxyModeToUrl(
-          url,
-          mode: currentPlaybackProxyModeOverride.value,
-        );
+        return _applyPlaybackProxyModeToUrl(url, mode: playbackMode);
       }
       if (path == null || path.isEmpty) {
         return url;
       }
     }
     if (path == null || path.isEmpty) return null;
-    return _buildStreamUrl(path, mode: currentPlaybackProxyModeOverride.value);
+    return _buildStreamUrl(path, mode: playbackMode);
   }
 
   String? _castUrlForEpisode(Episode episode) {
@@ -1410,6 +1411,10 @@ class PlayerController extends GetxController {
     } catch (_) {
       globalPlaybackProxyMode.value = _defaultPlaybackProxyMode;
     }
+  }
+
+  Future<void> _ensureGlobalPlaybackProxyModeLoaded() async {
+    await (_globalPlaybackProxyModeFuture ?? Future<void>.value());
   }
 
   Future<void> _restartCurrentEpisode() async {
