@@ -8,6 +8,7 @@ import 'package:ohome/app/data/api/drops.dart';
 import 'package:ohome/app/data/api/media_history.dart';
 import 'package:ohome/app/data/api/quark.dart';
 import 'package:ohome/app/data/api/quark_auto_save_task.dart';
+import 'package:ohome/app/data/api/quark_tv_login.dart';
 import 'package:ohome/app/data/api/quark_transfer_task.dart';
 import 'package:ohome/app/data/api/todo.dart';
 import 'package:ohome/app/data/api/user.dart';
@@ -41,6 +42,10 @@ class IndexServices {
     Get.put<TodoApi>(TodoApi(httpClient: httpClient), permanent: true);
     Get.put<QuarkAutoSaveTaskApi>(
       QuarkAutoSaveTaskApi(httpClient: httpClient),
+      permanent: true,
+    );
+    Get.put<QuarkTvLoginApi>(
+      QuarkTvLoginApi(httpClient: httpClient),
       permanent: true,
     );
     Get.put<QuarkTransferTaskApi>(

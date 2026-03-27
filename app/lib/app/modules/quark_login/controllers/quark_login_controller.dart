@@ -2,13 +2,17 @@ import 'package:dio/dio.dart';
 import 'package:get/get.dart';
 
 import '../../../data/api/config.dart';
+import '../../../data/api/quark_tv_login.dart';
 import '../../../data/models/config_model.dart';
 import '../../../data/models/config_upsert_payload.dart';
+import '../../../data/models/quark_tv_login_status.dart';
 import '../views/quark_cookie_web_login_view.dart';
+import '../views/quark_tv_qr_login_view.dart';
 
 class QuarkLoginController extends GetxController {
-  QuarkLoginController({ConfigApi? configApi})
-    : _configApi = configApi ?? Get.find<ConfigApi>();
+  QuarkLoginController({ConfigApi? configApi, QuarkTvLoginApi? quarkTvLoginApi})
+    : _configApi = configApi ?? Get.find<ConfigApi>(),
+      _quarkTvLoginApi = quarkTvLoginApi ?? Get.find<QuarkTvLoginApi>();
 
   static const String _quarkCookiesKey = 'quark_cookies';
   static const String _quarkLogoutUrl =
@@ -19,26 +23,35 @@ class QuarkLoginController extends GetxController {
       '(KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36';
 
   final ConfigApi _configApi;
+  final QuarkTvLoginApi _quarkTvLoginApi;
 
   final loading = false.obs;
-  final saving = false.obs;
-  final currentConfig = Rxn<ConfigModel>();
+  final cookieSaving = false.obs;
+  final tvLoading = false.obs;
+  final cookieConfig = Rxn<ConfigModel>();
+  final tvStatus = Rxn<QuarkTvLoginStatus>();
 
   @override
   void onInit() {
     super.onInit();
-    loadConfig();
+    loadData();
   }
 
-  DateTime? get updatedAt => currentConfig.value?.updatedAt;
+  DateTime? get cookieUpdatedAt => cookieConfig.value?.updatedAt;
 
-  bool get configured => currentConfig.value?.value.trim().isNotEmpty == true;
+  bool get cookieConfigured =>
+      cookieConfig.value?.value.trim().isNotEmpty == true;
 
-  Future<void> loadConfig() async {
+  DateTime? get tvUpdatedAt => tvStatus.value?.updatedAt;
+
+  bool get tvConfigured => tvStatus.value?.configured == true;
+
+  bool get tvPending => tvStatus.value?.pending == true;
+
+  Future<void> loadData() async {
     loading.value = true;
     try {
-      final config = await _configApi.findConfigByKey(_quarkCookiesKey);
-      currentConfig.value = config;
+      await Future.wait<void>([loadCookieConfig(), loadTvStatus()]);
     } catch (_) {
       return;
     } finally {
@@ -46,9 +59,29 @@ class QuarkLoginController extends GetxController {
     }
   }
 
+  Future<void> loadCookieConfig() async {
+    try {
+      cookieConfig.value = await _configApi.findConfigByKey(_quarkCookiesKey);
+    } catch (_) {
+      cookieConfig.value = null;
+    }
+  }
+
+  Future<void> loadTvStatus() async {
+    try {
+      tvStatus.value = await _quarkTvLoginApi.getStatus(showErrorToast: false);
+    } catch (_) {
+      tvStatus.value = const QuarkTvLoginStatus(
+        configured: false,
+        pending: false,
+        updatedAt: null,
+      );
+    }
+  }
+
   Future<void> openWebLogin() async {
-    if (saving.value) return;
-    final shouldResetSession = configured;
+    if (cookieSaving.value) return;
+    final shouldResetSession = cookieConfigured;
     if (shouldResetSession) {
       await _logoutCurrentCookies();
     }
@@ -62,14 +95,40 @@ class QuarkLoginController extends GetxController {
     await saveCookies(value);
   }
 
+  Future<void> openTvLogin() async {
+    if (tvLoading.value) return;
+    tvLoading.value = true;
+    try {
+      final startResult = await _quarkTvLoginApi.startLogin();
+      if (startResult.qrData.isEmpty) {
+        Get.snackbar('提示', '未获取到夸克TV二维码');
+        return;
+      }
+      final success = await Get.to<bool>(
+        () => QuarkTvQrLoginView(
+          api: _quarkTvLoginApi,
+          initialQrData: startResult.qrData,
+        ),
+      );
+      await loadTvStatus();
+      if (success == true) {
+        Get.snackbar('提示', '夸克TV登录成功');
+      }
+    } catch (_) {
+      return;
+    } finally {
+      tvLoading.value = false;
+    }
+  }
+
   Future<void> _logoutCurrentCookies() async {
-    final existing = currentConfig.value;
+    final existing = cookieConfig.value;
     final cookie = existing?.value.trim() ?? '';
     if (cookie.isEmpty) {
       return;
     }
 
-    saving.value = true;
+    cookieSaving.value = true;
     try {
       final dio = Dio(
         BaseOptions(
@@ -89,20 +148,20 @@ class QuarkLoginController extends GetxController {
       // Ignore logout request errors and still clear the locally stored cookie.
     } finally {
       await _clearSavedCookies();
-      saving.value = false;
+      cookieSaving.value = false;
     }
   }
 
   Future<void> _clearSavedCookies() async {
-    final existing = currentConfig.value;
+    final existing = cookieConfig.value;
     if (existing == null) {
-      currentConfig.value = null;
+      cookieConfig.value = null;
       return;
     }
     await _configApi.saveConfig(
       ConfigUpsertPayload.fromConfig(existing, value: ''),
     );
-    await loadConfig();
+    await loadCookieConfig();
   }
 
   Future<void> saveCookies(String value) async {
@@ -112,9 +171,9 @@ class QuarkLoginController extends GetxController {
       return;
     }
 
-    saving.value = true;
+    cookieSaving.value = true;
     try {
-      final existing = currentConfig.value;
+      final existing = cookieConfig.value;
       final payload = existing != null
           ? ConfigUpsertPayload.fromConfig(existing, value: normalized)
           : ConfigUpsertPayload(
@@ -126,11 +185,11 @@ class QuarkLoginController extends GetxController {
             );
       await _configApi.saveConfig(payload);
       Get.snackbar('提示', '夸克网页登录 Cookies 已保存');
-      await loadConfig();
+      await loadCookieConfig();
     } catch (_) {
       return;
     } finally {
-      saving.value = false;
+      cookieSaving.value = false;
     }
   }
 }

@@ -12,6 +12,7 @@ var (
 	fileService              service.FileService
 	quarkConfigService       service.QuarkConfigService
 	quarkFsService           service.QuarkFsService
+	quarkTVLoginService      service.QuarkTVLoginService
 	userMediaHistoryService  service.UserMediaHistoryService
 	doubanService            service.DoubanService
 	pansouService            service.PansouService

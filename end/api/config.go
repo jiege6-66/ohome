@@ -10,6 +10,9 @@ import (
 )
 
 const sensitiveConfigKeyQuarkCookies = "quark_cookies"
+const sensitiveConfigKeyQuarkTVRefreshToken = "quark_tv_refresh_token"
+const sensitiveConfigKeyQuarkTVDeviceID = "quark_tv_device_id"
+const sensitiveConfigKeyQuarkTVQueryToken = "quark_tv_query_token"
 const sensitiveConfigKeyQuarkSearchHTTPProxy = "quark_search_http_proxy"
 const sensitiveConfigKeyQuarkSearchHTTPSProxy = "quark_search_https_proxy"
 const sensitiveConfigKeyQuarkSearchChannels = "quark_search_channels"
@@ -21,6 +24,9 @@ const sensitiveConfigKeyQuarkStreamChunkMaxRetries = "quark_fs_chunk_max_retries
 
 var sensitiveConfigKeys = map[string]struct{}{
 	sensitiveConfigKeyQuarkCookies:               {},
+	sensitiveConfigKeyQuarkTVRefreshToken:        {},
+	sensitiveConfigKeyQuarkTVDeviceID:            {},
+	sensitiveConfigKeyQuarkTVQueryToken:          {},
 	sensitiveConfigKeyQuarkSearchHTTPProxy:       {},
 	sensitiveConfigKeyQuarkSearchHTTPSProxy:      {},
 	sensitiveConfigKeyQuarkSearchChannels:        {},

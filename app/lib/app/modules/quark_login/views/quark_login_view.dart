@@ -18,46 +18,77 @@ class QuarkLoginView extends GetView<QuarkLoginController> {
         }
 
         return ListView(
-          padding: EdgeInsets.fromLTRB(20.w, 20.h, 20.w, 120.h),
-          children: [_buildStatusCard()],
+          padding: EdgeInsets.fromLTRB(20.w, 20.h, 20.w, 32.h),
+          children: [
+            _buildLoginCard(
+              icon: Icons.cookie_outlined,
+              iconColor: const Color(0xFF80CBC4),
+              title: '夸克 Cookie',
+              updatedAt: controller.cookieUpdatedAt,
+              status: controller.cookieConfigured ? '已保存' : '未保存',
+              actionLabel: controller.cookieSaving.value
+                  ? '保存中'
+                  : controller.cookieConfigured
+                  ? '重新登录'
+                  : '网页登录',
+              onPressed: controller.cookieSaving.value
+                  ? null
+                  : controller.openWebLogin,
+              trailing: controller.cookieSaving.value
+                  ? SizedBox(
+                      width: 18.w,
+                      height: 18.w,
+                      child: const CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.public_rounded),
+            ),
+            SizedBox(height: 16.h),
+            _buildLoginCard(
+              icon: Icons.tv_rounded,
+              iconColor: const Color(0xFFFFB74D),
+              title: '夸克 TV',
+              updatedAt: controller.tvUpdatedAt,
+              status: controller.tvPending
+                  ? '扫码中'
+                  : controller.tvConfigured
+                  ? '已登录'
+                  : '未登录',
+              actionLabel: controller.tvLoading.value
+                  ? '处理中'
+                  : controller.tvConfigured
+                  ? '重新登录'
+                  : controller.tvPending
+                  ? '刷新二维码'
+                  : 'TV扫码登录',
+              onPressed: controller.tvLoading.value
+                  ? null
+                  : controller.openTvLogin,
+              trailing: controller.tvLoading.value
+                  ? SizedBox(
+                      width: 18.w,
+                      height: 18.w,
+                      child: const CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.qr_code_2_rounded),
+              subtitle: '302 直连播放会优先使用夸克 TV 转码接口',
+            ),
+          ],
         );
       }),
-      bottomNavigationBar: SafeArea(
-        minimum: EdgeInsets.fromLTRB(20.w, 0, 20.w, 20.h),
-        child: Obx(() {
-          final label = controller.saving.value
-              ? '保存中'
-              : controller.configured
-              ? '重新登录'
-              : '网页登录';
-          return FilledButton.icon(
-            onPressed: controller.saving.value ? null : controller.openWebLogin,
-            style: FilledButton.styleFrom(
-              minimumSize: Size(double.infinity, 50.h),
-              backgroundColor: AppThemeColors.primary,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16.r),
-              ),
-            ),
-            icon: controller.saving.value
-                ? SizedBox(
-                    width: 18.w,
-                    height: 18.w,
-                    child: const CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.public_rounded),
-            label: Text(label),
-          );
-        }),
-      ),
     );
   }
 
-  Widget _buildStatusCard() {
-    final updatedAt = controller.updatedAt;
-    final updatedText = updatedAt == null ? '尚未保存' : _formatDate(updatedAt);
-    final statusText = controller.configured ? '已保存' : '未保存';
-
+  Widget _buildLoginCard({
+    required IconData icon,
+    required Color iconColor,
+    required String title,
+    required String status,
+    required String actionLabel,
+    required VoidCallback? onPressed,
+    required Widget trailing,
+    DateTime? updatedAt,
+    String? subtitle,
+  }) {
     return Container(
       padding: EdgeInsets.all(18.w),
       decoration: BoxDecoration(
@@ -65,46 +96,76 @@ class QuarkLoginView extends GetView<QuarkLoginController> {
         borderRadius: BorderRadius.circular(22.r),
         border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 42.w,
-            height: 42.w,
-            decoration: BoxDecoration(
-              color: const Color(0xFF80CBC4).withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(14.r),
-            ),
-            child: const Icon(Icons.cookie_outlined, color: Color(0xFF80CBC4)),
+          Row(
+            children: [
+              Container(
+                width: 42.w,
+                height: 42.w,
+                decoration: BoxDecoration(
+                  color: iconColor.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(14.r),
+                ),
+                child: Icon(icon, color: iconColor),
+              ),
+              SizedBox(width: 12.w),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        fontSize: 16.sp,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                      ),
+                    ),
+                    SizedBox(height: 4.h),
+                    Text(
+                      _formatUpdatedAt(updatedAt),
+                      style: TextStyle(fontSize: 12.sp, color: Colors.white54),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
-          SizedBox(width: 12.w),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '夸克 Cookie',
-                  style: TextStyle(
-                    fontSize: 16.sp,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.white,
-                  ),
-                ),
-                SizedBox(height: 4.h),
-                Text(
-                  updatedText,
-                  style: TextStyle(fontSize: 12.sp, color: Colors.white54),
-                ),
-                SizedBox(height: 6.h),
-                Text(
-                  statusText,
-                  style: TextStyle(fontSize: 13.sp, color: Colors.white70),
-                ),
-              ],
+          SizedBox(height: 12.h),
+          Text(
+            status,
+            style: TextStyle(fontSize: 13.sp, color: Colors.white70),
+          ),
+          if (subtitle != null && subtitle.trim().isNotEmpty) ...[
+            SizedBox(height: 6.h),
+            Text(
+              subtitle.trim(),
+              style: TextStyle(fontSize: 12.sp, color: Colors.white38),
             ),
+          ],
+          SizedBox(height: 16.h),
+          FilledButton.icon(
+            onPressed: onPressed,
+            style: FilledButton.styleFrom(
+              minimumSize: Size(double.infinity, 48.h),
+              backgroundColor: AppThemeColors.primary,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16.r),
+              ),
+            ),
+            icon: trailing,
+            label: Text(actionLabel),
           ),
         ],
       ),
     );
+  }
+
+  static String _formatUpdatedAt(DateTime? updatedAt) {
+    if (updatedAt == null) return '尚未保存';
+    return '最近保存：${_formatDate(updatedAt)}';
   }
 
   static String _formatDate(DateTime value) {

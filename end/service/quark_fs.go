@@ -32,7 +32,7 @@ func (s *QuarkFsService) ListFiles(pathDTO *dto.QuarkPathDTO) ([]dto.QuarkFsInfo
 	}
 	ctx := context.Background()
 
-	_, rootEntry, rootPath, err := s.resolveApplicationRoot(ctx, client, pathDTO.Application, false)
+	_, rootEntry, rootPath, err := s.resolveApplicationRoot(ctx, client, pathDTO.Application, true)
 	if err != nil {
 		if errors.Is(err, errQuarkEntryNotFound) {
 			logQuarkWarnf("[quarkFs:list] application root not found application=%s rootPath=%s", strings.TrimSpace(pathDTO.Application), rootPath)
@@ -440,16 +440,35 @@ func (s *QuarkFsService) resolveDirectPlayableLink(ctx context.Context, client *
 		return quarkFileLink{}, errors.New("夸克客户端未初始化")
 	}
 
-	if !entry.IsDir() && entry.Category == 1 && entry.Size > 0 {
-		link, err := client.getTranscodingLink(ctx, entry.Fid)
-		if err == nil && strings.TrimSpace(link.URL) != "" {
-			logQuarkWarnf("[quarkFs:stream] use transcoding redirect fid=%s size=%d", strings.TrimSpace(entry.Fid), entry.Size)
+	return resolveQuarkDirectLinkForEntry(
+		entry,
+		func() (quarkFileLink, error) {
+			link, err := getQuarkTVTranscodingLink(ctx, entry.Fid)
+			if err != nil {
+				logQuarkWarnf("[quarkFs:stream] quark tv transcoding redirect failed fid=%s err=%v", strings.TrimSpace(entry.Fid), err)
+				return quarkFileLink{}, err
+			}
+			if strings.TrimSpace(link.URL) == "" {
+				return quarkFileLink{}, errors.New("夸克TV转码链接获取失败")
+			}
+			logQuarkWarnf("[quarkFs:stream] use quark tv transcoding redirect fid=%s size=%d", strings.TrimSpace(entry.Fid), entry.Size)
 			return link, nil
-		}
-		logQuarkWarnf("[quarkFs:stream] transcoding redirect fallback to download fid=%s err=%v", strings.TrimSpace(entry.Fid), err)
-	}
+		},
+		func() (quarkFileLink, error) {
+			return client.getFileLink(ctx, entry.Fid)
+		},
+	)
+}
 
-	return client.getFileLink(ctx, entry.Fid)
+func resolveQuarkDirectLinkForEntry(
+	entry quarkDriveFile,
+	resolveVideo func() (quarkFileLink, error),
+	resolveDownload func() (quarkFileLink, error),
+) (quarkFileLink, error) {
+	if !entry.IsDir() && entry.Category == 1 && entry.Size > 0 {
+		return resolveVideo()
+	}
+	return resolveDownload()
 }
 
 func (s *QuarkFsService) DescribeFile(pathDTO *dto.QuarkPathDTO) (QuarkProxyMeta, error) {

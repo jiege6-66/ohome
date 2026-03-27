@@ -93,6 +93,7 @@ func initBasePlatformRoutes() {
 	InitDiscoveryRoutes()
 	InitUserRoutes()
 	InitConfigRoutes()
+	InitQuarkLoginRoutes()
 	InitTodoRoutes()
 	InitDictRoutes()
 	InitFileRoutes()
