@@ -598,6 +598,7 @@ class PlayerController extends GetxController {
 
   Future<void> playAt(
     int index, {
+    bool forceReopen = false,
     Duration? startPosition,
     bool clearResume = false,
   }) async {
@@ -664,7 +665,7 @@ class PlayerController extends GetxController {
       pendingSeek = intro;
     }
 
-    if (_shouldSkipDuplicateOpen(index, episodePath, url)) {
+    if (!forceReopen && _shouldSkipDuplicateOpen(index, episodePath, url)) {
       currentIndex.value = index;
       if (clearResume) {
         _resumeEpisodePath = null;
@@ -1252,7 +1253,12 @@ class PlayerController extends GetxController {
 
     final wasPlaying = player.state.playing;
     final position = player.state.position;
-    await playAt(index, startPosition: position, clearResume: true);
+    await playAt(
+      index,
+      forceReopen: true,
+      startPosition: position,
+      clearResume: true,
+    );
     if (!wasPlaying) {
       try {
         await player.pause();

@@ -1019,7 +1019,10 @@ class _PlayerViewState extends State<PlayerView> with WidgetsBindingObserver {
     );
   }
 
-  void _showPlaybackProxyModeSheet(BuildContext context) {
+  void _showPlaybackProxyModeSheet(
+    BuildContext context, {
+    bool fullscreenDrawer = false,
+  }) {
     if (!controller.canSwitchCurrentPlaybackProxyMode) {
       Get.snackbar('提示', '当前视频不支持切换播放模式');
       return;
@@ -1030,41 +1033,67 @@ class _PlayerViewState extends State<PlayerView> with WidgetsBindingObserver {
       (value: '302_redirect', title: '302', subtitle: '直连转码，仅当前视频生效'),
     ];
 
+    Widget buildBody(BuildContext ctx) {
+      return Obx(() {
+        final currentMode = controller.effectivePlaybackProxyMode;
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: options
+              .map((option) {
+                final selected = currentMode == option.value;
+                return _buildSheetOptionTile(
+                  context: ctx,
+                  title: option.title,
+                  subtitle: option.subtitle,
+                  selected: selected,
+                  onTap: () {
+                    Navigator.of(ctx).pop();
+                    unawaited(
+                      controller.setCurrentPlaybackProxyMode(option.value),
+                    );
+                  },
+                );
+              })
+              .toList(growable: false),
+        );
+      });
+    }
+
+    Widget buildContent(BuildContext ctx) {
+      return Obx(() {
+        return _buildStandardBottomSheet(
+          context: ctx,
+          title: '当前视频播放模式',
+          subtitle:
+              '切换后会重载当前视频 · 当前：${controller.effectivePlaybackProxyModeLabel}',
+          child: buildBody(ctx),
+        );
+      });
+    }
+
+    if (fullscreenDrawer) {
+      _showFullscreenSideDrawer(
+        context,
+        childBuilder: (ctx) => _buildFullscreenDrawerContainer(
+          child: Obx(() {
+            return _buildFullscreenDrawerSection(
+              title: '当前视频播放模式',
+              subtitle:
+                  '切换后会重载当前视频 · 当前：${controller.effectivePlaybackProxyModeLabel}',
+              child: buildBody(ctx),
+            );
+          }),
+        ),
+      );
+      return;
+    }
+
     showModalBottomSheet<void>(
       context: context,
       useRootNavigator: true,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) {
-        return Obx(() {
-          final currentMode = controller.effectivePlaybackProxyMode;
-          return _buildStandardBottomSheet(
-            context: ctx,
-            title: '当前视频播放模式',
-            subtitle: '当前：${controller.effectivePlaybackProxyModeLabel}',
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: options
-                  .map((option) {
-                    final selected = currentMode == option.value;
-                    return _buildSheetOptionTile(
-                      context: ctx,
-                      title: option.title,
-                      subtitle: option.subtitle,
-                      selected: selected,
-                      onTap: () {
-                        Navigator.of(ctx).pop();
-                        unawaited(
-                          controller.setCurrentPlaybackProxyMode(option.value),
-                        );
-                      },
-                    );
-                  })
-                  .toList(growable: false),
-            ),
-          );
-        });
-      },
+      builder: (ctx) => buildContent(ctx),
     );
   }
 
@@ -1245,6 +1274,7 @@ class _PlayerViewState extends State<PlayerView> with WidgetsBindingObserver {
     return Obx(() {
       final isCover = controller.isFullscreenCover;
       final currentRate = controller.playbackRate.value;
+      final currentPlaybackMode = controller.effectivePlaybackProxyModeLabel;
       return _buildFullscreenDrawerContainer(
         child: _buildFullscreenDrawerSection(
           title: '更多设置',
@@ -1262,6 +1292,18 @@ class _PlayerViewState extends State<PlayerView> with WidgetsBindingObserver {
                     fit: controller.isFullscreenCover
                         ? BoxFit.cover
                         : BoxFit.contain,
+                  );
+                },
+              ),
+              _buildFullscreenSettingRow(
+                icon: Icons.route_rounded,
+                title: '播放模式',
+                subtitle: currentPlaybackMode,
+                onTap: () {
+                  Navigator.of(context).pop();
+                  _showPlaybackProxyModeSheet(
+                    state.context,
+                    fullscreenDrawer: true,
                   );
                 },
               ),
