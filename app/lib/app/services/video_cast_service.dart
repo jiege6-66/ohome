@@ -37,7 +37,8 @@ class VideoCastService extends GetxService {
       currentDeviceName.value = device.info.friendlyName;
       isCasting.value = true;
       return true;
-    } catch (_) {
+    } catch (error, stackTrace) {
+      Get.log('startCasting failed: $error\n$stackTrace');
       return false;
     }
   }
@@ -57,7 +58,8 @@ class VideoCastService extends GetxService {
         sourcePath: sourcePath,
       );
       return true;
-    } catch (_) {
+    } catch (error, stackTrace) {
+      Get.log('castToCurrentDevice failed: $error\n$stackTrace');
       return false;
     }
   }

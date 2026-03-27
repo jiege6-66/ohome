@@ -131,21 +131,7 @@ class PlayerController extends GetxController {
   String? get currentCastUrl {
     final current = _currentEpisode;
     if (current == null) return null;
-    final direct = current.url?.trim();
-    if (direct != null && direct.isNotEmpty) return direct;
-    final path = current.path?.trim();
-    if (path == null || path.isEmpty) return null;
-    final streamUrl = _buildStreamUrl(path);
-    if (streamUrl == null || streamUrl.isEmpty) return null;
-    final uri = Uri.parse(streamUrl);
-    return uri
-        .replace(
-          queryParameters: <String, String>{
-            ...uri.queryParameters,
-            'cast': 'true',
-          },
-        )
-        .toString();
+    return _castUrlForEpisode(current);
   }
 
   String get currentCastSourcePath => _currentEpisode?.path?.trim() ?? '';
@@ -727,6 +713,9 @@ class PlayerController extends GetxController {
   String? _castUrlForEpisode(Episode episode) {
     final streamUrl = _episodeUrl(episode);
     if (streamUrl == null || streamUrl.isEmpty) return null;
+    if (!_isLocalProxyStreamUrl(streamUrl)) {
+      return streamUrl;
+    }
     final uri = Uri.parse(streamUrl);
     return uri
         .replace(
