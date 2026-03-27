@@ -549,7 +549,7 @@ class _PlayerViewState extends State<PlayerView> with WidgetsBindingObserver {
                     '选集',
                     style: TextStyle(
                       color: Colors.white,
-                      fontSize: compact ? 13 : 16,
+                      fontSize: 16,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -574,10 +574,7 @@ class _PlayerViewState extends State<PlayerView> with WidgetsBindingObserver {
                     ),
                     label: Text(
                       asc ? '正序' : '倒序',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: compact ? 12 : 14,
-                      ),
+                      style: TextStyle(color: Colors.white, fontSize: 15),
                     ),
                   );
                 }),
@@ -736,12 +733,10 @@ class _PlayerViewState extends State<PlayerView> with WidgetsBindingObserver {
       );
 
       if (sidePanel) {
-        return Container(
+        return Material(
           clipBehavior: Clip.antiAlias,
-          decoration: BoxDecoration(
-            color: const Color(0xFF111111),
-            borderRadius: BorderRadius.horizontal(left: Radius.circular(20.r)),
-          ),
+          color: const Color(0xFF111111),
+          borderRadius: BorderRadius.horizontal(left: Radius.circular(20.r)),
           child: panelBody,
         );
       }
@@ -1151,14 +1146,16 @@ class _PlayerViewState extends State<PlayerView> with WidgetsBindingObserver {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              SizedBox(height: 15.h),
               Text(
                 title,
                 style: TextStyle(
                   color: Colors.white,
-                  fontSize: titleFontSize ?? 13,
+                  fontSize: titleFontSize ?? 16,
                   fontWeight: FontWeight.w600,
                 ),
               ),
+              SizedBox(height: 15.h),
               if (subtitle != null && subtitle.isNotEmpty) ...[
                 SizedBox(height: 2.h),
                 Text(
@@ -1236,7 +1233,6 @@ class _PlayerViewState extends State<PlayerView> with WidgetsBindingObserver {
             height: 1,
             thickness: 0.5,
             color: Colors.white.withValues(alpha: 0.06),
-            indent: 22.w,
           ),
       ],
     );
@@ -1275,10 +1271,7 @@ class _PlayerViewState extends State<PlayerView> with WidgetsBindingObserver {
                 subtitle: _formatRate(currentRate),
                 onTap: () {
                   Navigator.of(context).pop();
-                  _showPlaybackRateSheet(
-                    state.context,
-                    fullscreenDrawer: true,
-                  );
+                  _showPlaybackRateSheet(state.context, fullscreenDrawer: true);
                 },
               ),
               _buildFullscreenSettingRow(
