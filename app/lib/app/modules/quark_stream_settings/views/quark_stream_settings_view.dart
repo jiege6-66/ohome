@@ -20,51 +20,8 @@ class QuarkStreamSettingsView extends GetView<QuarkStreamSettingsController> {
         return ListView(
           padding: EdgeInsets.fromLTRB(20.w, 20.h, 20.w, 120.h),
           children: [
-            _buildIntroCard(),
             SizedBox(height: 16.h),
             _buildModeCard(),
-            Obx(() {
-              final hideChunkSettings =
-                  controller.selectedMode.value == '302_redirect';
-              if (hideChunkSettings) {
-                return const SizedBox.shrink();
-              }
-
-              return Column(
-                children: [
-                  SizedBox(height: 12.h),
-                  _buildNumberCard(
-                    icon: Icons.hub_outlined,
-                    title: '并发数',
-                    hint: QuarkStreamSettingsController.defaultConcurrency,
-                    controller: controller.concurrencyController,
-                    updatedAt: controller.updatedAtFor(
-                      QuarkStreamSettingsController.concurrencyKey,
-                    ),
-                  ),
-                  SizedBox(height: 12.h),
-                  _buildNumberCard(
-                    icon: Icons.splitscreen_outlined,
-                    title: '分片大小（MB）',
-                    hint: QuarkStreamSettingsController.defaultPartSizeMB,
-                    controller: controller.partSizeController,
-                    updatedAt: controller.updatedAtFor(
-                      QuarkStreamSettingsController.partSizeMBKey,
-                    ),
-                  ),
-                  SizedBox(height: 12.h),
-                  _buildNumberCard(
-                    icon: Icons.refresh_rounded,
-                    title: '分片重试次数',
-                    hint: QuarkStreamSettingsController.defaultChunkMaxRetries,
-                    controller: controller.chunkRetriesController,
-                    updatedAt: controller.updatedAtFor(
-                      QuarkStreamSettingsController.chunkMaxRetriesKey,
-                    ),
-                  ),
-                ],
-              );
-            }),
           ],
         );
       }),
@@ -90,30 +47,6 @@ class QuarkStreamSettingsView extends GetView<QuarkStreamSettingsController> {
             label: Text(controller.saving.value ? '保存中' : '保存配置'),
           );
         }),
-      ),
-    );
-  }
-
-  Widget _buildIntroCard() {
-    return Container(
-      padding: EdgeInsets.all(18.w),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1A1A1A),
-        borderRadius: BorderRadius.circular(22.r),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            '在线播放配置',
-            style: TextStyle(
-              fontSize: 16.sp,
-              fontWeight: FontWeight.w600,
-              color: Colors.white,
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -149,7 +82,7 @@ class QuarkStreamSettingsView extends GetView<QuarkStreamSettingsController> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '代理模式',
+                      '代理模式（全局）',
                       style: TextStyle(
                         fontSize: 15.sp,
                         fontWeight: FontWeight.w600,
@@ -182,7 +115,7 @@ class QuarkStreamSettingsView extends GetView<QuarkStreamSettingsController> {
                 SizedBox(height: 10.h),
                 _buildModeOption(
                   value: '302_redirect',
-                  title: '302 直连',
+                  title: '302 转码',
                   selected: controller.selectedMode.value == '302_redirect',
                 ),
               ],
@@ -261,92 +194,6 @@ class QuarkStreamSettingsView extends GetView<QuarkStreamSettingsController> {
             ],
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildNumberCard({
-    required IconData icon,
-    required String title,
-    required String hint,
-    required TextEditingController controller,
-    DateTime? updatedAt,
-  }) {
-    return Container(
-      padding: EdgeInsets.all(18.w),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1A1A1A),
-        borderRadius: BorderRadius.circular(22.r),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 40.w,
-                height: 40.w,
-                decoration: BoxDecoration(
-                  color: AppThemeColors.primary.withValues(alpha: 0.14),
-                  borderRadius: BorderRadius.circular(14.r),
-                ),
-                child: Icon(icon, color: AppThemeColors.primary),
-              ),
-              SizedBox(width: 12.w),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: TextStyle(
-                        fontSize: 15.sp,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.white,
-                      ),
-                    ),
-                    SizedBox(height: 4.h),
-                    Text(
-                      _formatUpdatedAt(updatedAt),
-                      style: TextStyle(fontSize: 12.sp, color: Colors.white54),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          SizedBox(height: 12.h),
-          TextField(
-            controller: controller,
-            keyboardType: TextInputType.number,
-            style: const TextStyle(color: Colors.white),
-            decoration: InputDecoration(
-              hintText: hint,
-              hintStyle: const TextStyle(color: Colors.white38),
-              filled: true,
-              fillColor: const Color(0xFF111111),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(16.r),
-                borderSide: BorderSide(
-                  color: Colors.white.withValues(alpha: 0.08),
-                ),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(16.r),
-                borderSide: BorderSide(
-                  color: Colors.white.withValues(alpha: 0.08),
-                ),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(16.r),
-                borderSide: BorderSide(
-                  color: AppThemeColors.primary.withValues(alpha: 0.8),
-                ),
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }

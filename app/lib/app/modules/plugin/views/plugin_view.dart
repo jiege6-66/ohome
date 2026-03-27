@@ -384,7 +384,7 @@ class _QuarkAdminMenuCard extends StatelessWidget {
                                 icon: Icons.smart_display_outlined,
                                 iconColor: const Color(0xFFBA68C8),
                                 title: '夸克播放',
-                                subtitle: '配置 302 / 本地代理、并发数、分片大小和重试次数',
+                                subtitle: '配置 302 / 本地代理，更多代理参数请在后端配置文件设置',
                                 onTap: onStreamTap,
                               ),
                             ],

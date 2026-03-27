@@ -19,6 +19,9 @@ func InitConfig() {
 	viper.SetDefault("drops.itemReminderDays", "7,3,1,0")
 	viper.SetDefault("drops.eventReminderDays", "7,3,1,0")
 	viper.SetDefault("config.allowUserRegistration", true)
+	viper.SetDefault("quark.stream.concurrency", 3)
+	viper.SetDefault("quark.stream.partSizeMB", 10)
+	viper.SetDefault("quark.stream.chunkMaxRetries", 3)
 	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	viper.AutomaticEnv()
 

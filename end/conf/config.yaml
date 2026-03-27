@@ -31,3 +31,9 @@ config:
 drops:
   itemReminderDays: "7,3,1,0" # 物资到期提醒：提前 7/3/1 天和当天
   eventReminderDays: "7,3,1,0" # 重要日期提醒：提前 7/3/1 天和当天
+
+quark:
+  stream:
+    concurrency: 3 # 本地代理并发分片数
+    partSizeMB: 10 # 本地代理分片大小（MB）
+    chunkMaxRetries: 3 # 本地代理分片重试次数

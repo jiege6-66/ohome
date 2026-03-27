@@ -5,13 +5,15 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+
+	"github.com/spf13/viper"
 )
 
 const (
 	quarkStreamWebProxyModeKey        = "quark_fs_web_proxy_mode"
-	quarkStreamConcurrencyKey         = "quark_fs_concurrency"
-	quarkStreamPartSizeMBKey          = "quark_fs_part_size_mb"
-	quarkStreamChunkMaxRetriesKey     = "quark_fs_chunk_max_retries"
+	quarkStreamConfigConcurrencyKey   = "quark.stream.concurrency"
+	quarkStreamConfigPartSizeMBKey    = "quark.stream.partSizeMB"
+	quarkStreamConfigChunkRetriesKey  = "quark.stream.chunkMaxRetries"
 	defaultQuarkStreamWebProxyMode    = "native_proxy"
 	defaultQuarkStreamConcurrency     = 3
 	defaultQuarkStreamPartSizeMB      = 10
@@ -66,7 +68,7 @@ func invalidateQuarkStreamConfigCache() {
 
 func isQuarkStreamConfigKey(key string) bool {
 	switch strings.TrimSpace(key) {
-	case quarkStreamWebProxyModeKey, quarkStreamConcurrencyKey, quarkStreamPartSizeMBKey, quarkStreamChunkMaxRetriesKey:
+	case quarkStreamWebProxyModeKey:
 		return true
 	default:
 		return false
@@ -87,13 +89,25 @@ func buildQuarkStreamConfig(configs []model.Config) quarkStreamConfig {
 		values[strings.TrimSpace(cfg.Key)] = strings.TrimSpace(cfg.Value)
 	}
 
-	partSizeMB := parseQuarkConfigInt(values[quarkStreamPartSizeMBKey], defaultQuarkStreamPartSizeMB, 1)
+	partSizeMB := parseQuarkConfigInt(
+		viper.GetString(quarkStreamConfigPartSizeMBKey),
+		defaultQuarkStreamPartSizeMB,
+		1,
+	)
 
 	return quarkStreamConfig{
-		WebProxyMode:    normalizeQuarkWebProxyMode(values[quarkStreamWebProxyModeKey]),
-		Concurrency:     parseQuarkConfigInt(values[quarkStreamConcurrencyKey], defaultQuarkStreamConcurrency, 1),
-		PartSize:        int64(partSizeMB) * 1024 * 1024,
-		ChunkMaxRetries: parseQuarkConfigInt(values[quarkStreamChunkMaxRetriesKey], defaultQuarkStreamChunkMaxRetries, 0),
+		WebProxyMode: normalizeQuarkWebProxyMode(values[quarkStreamWebProxyModeKey]),
+		Concurrency: parseQuarkConfigInt(
+			viper.GetString(quarkStreamConfigConcurrencyKey),
+			defaultQuarkStreamConcurrency,
+			1,
+		),
+		PartSize: int64(partSizeMB) * 1024 * 1024,
+		ChunkMaxRetries: parseQuarkConfigInt(
+			viper.GetString(quarkStreamConfigChunkRetriesKey),
+			defaultQuarkStreamChunkMaxRetries,
+			0,
+		),
 	}
 }
 
@@ -129,9 +143,6 @@ func normalizeQuarkWebProxyMode(raw string) string {
 func quarkStreamConfigKeys() []string {
 	return []string{
 		quarkStreamWebProxyModeKey,
-		quarkStreamConcurrencyKey,
-		quarkStreamPartSizeMBKey,
-		quarkStreamChunkMaxRetriesKey,
 	}
 }
 
@@ -147,24 +158,6 @@ func EnsureDefaultQuarkStreamConfigs() error {
 			name:   "夸克播放代理模式",
 			value:  defaultQuarkStreamWebProxyMode,
 			remark: "夸克在线播放代理模式：native_proxy=本地代理，302_redirect=302直连",
-		},
-		{
-			key:    quarkStreamConcurrencyKey,
-			name:   "夸克播放并发数",
-			value:  strconv.Itoa(defaultQuarkStreamConcurrency),
-			remark: "夸克在线播放并发回源分片数，建议 2-4",
-		},
-		{
-			key:    quarkStreamPartSizeMBKey,
-			name:   "夸克播放分片大小MB",
-			value:  strconv.Itoa(defaultQuarkStreamPartSizeMB),
-			remark: "夸克在线播放每个分片大小，单位 MB",
-		},
-		{
-			key:    quarkStreamChunkMaxRetriesKey,
-			name:   "夸克播放分片重试次数",
-			value:  strconv.Itoa(defaultQuarkStreamChunkMaxRetries),
-			remark: "夸克在线播放单个分片失败后的最大重试次数",
 		},
 	}
 
