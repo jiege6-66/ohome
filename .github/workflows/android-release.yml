@@ -70,20 +70,48 @@ jobs:
         shell: bash
         run: |
           GH_PROXY_PREFIX="https://gh-proxy.org/"
-          APK_SOURCE="app/${APK_RELATIVE_PATH}"
-          APK_ASSET="app/build/app/outputs/flutter-apk/ohome-release.apk"
+          OUTPUT_DIR="app/build/app/outputs/flutter-apk"
+          DEFAULT_ABI="arm64-v8a"
           MANIFEST_ASSET="app/build/app/outputs/flutter-apk/android.json"
 
-          cp "$APK_SOURCE" "$APK_ASSET"
-          APK_SHA256=$(shasum -a 256 "$APK_ASSET" | awk '{print $1}')
+          declare -A ABI_SOURCE_PATHS=(
+            [arm64-v8a]="app/${APK_RELATIVE_PATH_ARM64_V8A}"
+            [armeabi-v7a]="app/${APK_RELATIVE_PATH_ARMEABI_V7A}"
+            [x86_64]="app/${APK_RELATIVE_PATH_X86_64}"
+          )
+          declare -A ABI_ASSET_PATHS=(
+            [arm64-v8a]="${OUTPUT_DIR}/ohome-release-arm64-v8a.apk"
+            [armeabi-v7a]="${OUTPUT_DIR}/ohome-release-armeabi-v7a.apk"
+            [x86_64]="${OUTPUT_DIR}/ohome-release-x86_64.apk"
+          )
+          declare -A ABI_SHA256=()
+
+          for abi in arm64-v8a armeabi-v7a x86_64; do
+            cp "${ABI_SOURCE_PATHS[$abi]}" "${ABI_ASSET_PATHS[$abi]}"
+            ABI_SHA256[$abi]=$(shasum -a 256 "${ABI_ASSET_PATHS[$abi]}" | awk '{print $1}')
+          done
 
           cat > "$MANIFEST_ASSET" <<EOF
           {
             "versionName": "${BUILD_NAME}",
             "versionCode": ${BUILD_NUMBER},
-            "apkUrl": "${GH_PROXY_PREFIX}https://github.com/${GITHUB_REPOSITORY}/releases/latest/download/ohome-release.apk",
-            "sha256": "${APK_SHA256}",
-            "releaseNotes": "GitHub Release ${GITHUB_REF_NAME}"
+            "apkUrl": "${GH_PROXY_PREFIX}https://github.com/${GITHUB_REPOSITORY}/releases/latest/download/ohome-release-${DEFAULT_ABI}.apk",
+            "sha256": "${ABI_SHA256[$DEFAULT_ABI]}",
+            "releaseNotes": "GitHub Release ${GITHUB_REF_NAME}",
+            "artifacts": {
+              "arm64-v8a": {
+                "apkUrl": "${GH_PROXY_PREFIX}https://github.com/${GITHUB_REPOSITORY}/releases/latest/download/ohome-release-arm64-v8a.apk",
+                "sha256": "${ABI_SHA256[arm64-v8a]}"
+              },
+              "armeabi-v7a": {
+                "apkUrl": "${GH_PROXY_PREFIX}https://github.com/${GITHUB_REPOSITORY}/releases/latest/download/ohome-release-armeabi-v7a.apk",
+                "sha256": "${ABI_SHA256[armeabi-v7a]}"
+              },
+              "x86_64": {
+                "apkUrl": "${GH_PROXY_PREFIX}https://github.com/${GITHUB_REPOSITORY}/releases/latest/download/ohome-release-x86_64.apk",
+                "sha256": "${ABI_SHA256[x86_64]}"
+              }
+            }
           }
           EOF
 
@@ -95,5 +123,7 @@ jobs:
           overwrite_files: true
           fail_on_unmatched_files: true
           files: |
-            app/build/app/outputs/flutter-apk/ohome-release.apk
+            app/build/app/outputs/flutter-apk/ohome-release-arm64-v8a.apk
+            app/build/app/outputs/flutter-apk/ohome-release-armeabi-v7a.apk
+            app/build/app/outputs/flutter-apk/ohome-release-x86_64.apk
             app/build/app/outputs/flutter-apk/android.json

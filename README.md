@@ -324,7 +324,9 @@ DB:
 Android Release 工作流会把安装包发布到 GitHub Releases。
 
 - Release 页面：[https://github.com/leftScience/ohome/releases](https://github.com/leftScience/ohome/releases)
-- 最新 APK（国内加速）：[https://gh-proxy.org/https://github.com/leftScience/ohome/releases/latest/download/ohome-release.apk](https://gh-proxy.org/https://github.com/leftScience/ohome/releases/latest/download/ohome-release.apk)
+- ARM64 APK（国内加速，推荐大多数真机）：[https://gh-proxy.org/https://github.com/leftScience/ohome/releases/latest/download/ohome-release-arm64-v8a.apk](https://gh-proxy.org/https://github.com/leftScience/ohome/releases/latest/download/ohome-release-arm64-v8a.apk)
+- ARMv7 APK（国内加速，旧设备）：[https://gh-proxy.org/https://github.com/leftScience/ohome/releases/latest/download/ohome-release-armeabi-v7a.apk](https://gh-proxy.org/https://github.com/leftScience/ohome/releases/latest/download/ohome-release-armeabi-v7a.apk)
+- x86_64 APK（国内加速，模拟器）：[https://gh-proxy.org/https://github.com/leftScience/ohome/releases/latest/download/ohome-release-x86_64.apk](https://gh-proxy.org/https://github.com/leftScience/ohome/releases/latest/download/ohome-release-x86_64.apk)
 - 最新更新清单（国内加速）：[https://gh-proxy.org/https://github.com/leftScience/ohome/releases/latest/download/android.json](https://gh-proxy.org/https://github.com/leftScience/ohome/releases/latest/download/android.json)
 
 ### 客户端如何连接服务端

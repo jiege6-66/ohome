@@ -6,7 +6,8 @@ cd "$(dirname "$0")"
 PUBSPEC_FILE="pubspec.yaml"
 APP_ENV="prod"
 OUTPUT_DIR="build/app/outputs/flutter-apk"
-APK_FILENAME="app-release.apk"
+APK_SPLIT_PER_ABI="${APK_SPLIT_PER_ABI:-1}"
+DEFAULT_SPLIT_ABI="arm64-v8a"
 DRY_RUN=""
 REQUESTED_BUILD_NUMBER=""
 BUILD_METADATA_FILE="${BUILD_METADATA_FILE:-}"
@@ -136,6 +137,27 @@ if [[ -n "$RELEASE_TAG" ]]; then
   fi
 fi
 
+declare -a ABI_OUTPUTS=()
+BUILD_ARGS=(
+  apk
+  --release
+  --dart-define=APP_ENV="$APP_ENV"
+  --build-name="$BUILD_NAME"
+  --build-number="$BUILD_NUMBER"
+)
+
+if [[ "$APK_SPLIT_PER_ABI" == "1" ]]; then
+  BUILD_ARGS+=(--split-per-abi)
+  ABI_OUTPUTS=(
+    "arm64-v8a:app-arm64-v8a-release.apk"
+    "armeabi-v7a:app-armeabi-v7a-release.apk"
+    "x86_64:app-x86_64-release.apk"
+  )
+  APK_FILENAME="app-${DEFAULT_SPLIT_ABI}-release.apk"
+else
+  APK_FILENAME="app-release.apk"
+fi
+
 APK_RELATIVE_PATH="$OUTPUT_DIR/$APK_FILENAME"
 
 echo ""
@@ -144,6 +166,7 @@ echo "Build number : $BUILD_NUMBER ($BUILD_NUMBER_SOURCE)"
 echo "Release tag  : ${RELEASE_TAG:-<none>}"
 echo "APK file     : $APK_RELATIVE_PATH"
 echo "Output dir   : $OUTPUT_DIR"
+echo "Split per ABI: $APK_SPLIT_PER_ABI"
 echo ""
 
 write_metadata() {
@@ -159,14 +182,27 @@ DISPLAY_VERSION=$BUILD_NAME+$BUILD_NUMBER
 APK_RELATIVE_PATH=$APK_RELATIVE_PATH
 APK_FILENAME=$APK_FILENAME
 OUTPUT_DIR=$OUTPUT_DIR
+APK_SPLIT_PER_ABI=$APK_SPLIT_PER_ABI
 EOF
+
+  if [[ "$APK_SPLIT_PER_ABI" == "1" ]]; then
+    for entry in "${ABI_OUTPUTS[@]}"; do
+      abi="${entry%%:*}"
+      filename="${entry#*:}"
+      abi_env_name=$(echo "$abi" | tr '[:lower:]-' '[:upper:]_')
+      cat >> "$BUILD_METADATA_FILE" <<EOF
+APK_RELATIVE_PATH_${abi_env_name}=$OUTPUT_DIR/$filename
+APK_FILENAME_${abi_env_name}=$filename
+EOF
+    done
+  fi
 }
 
 # ── Dry run ──────────────────────────────────────────────────────
 if [[ -n "$DRY_RUN" ]]; then
   write_metadata
   echo "[DRY RUN] flutter pub get"
-  echo "[DRY RUN] flutter build apk --release --dart-define=APP_ENV=$APP_ENV --build-name=$BUILD_NAME --build-number=$BUILD_NUMBER"
+  echo "[DRY RUN] flutter build ${BUILD_ARGS[*]}"
   exit 0
 fi
 
@@ -177,10 +213,7 @@ if [[ $? -ne 0 ]]; then
   exit 1
 fi
 
-flutter build apk --release \
-  --dart-define=APP_ENV="$APP_ENV" \
-  --build-name="$BUILD_NAME" \
-  --build-number="$BUILD_NUMBER"
+flutter build "${BUILD_ARGS[@]}"
 if [[ $? -ne 0 ]]; then
   echo "[ERROR] flutter build apk failed."
   exit 1
