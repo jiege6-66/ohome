@@ -8,6 +8,7 @@ APP_ENV="prod"
 OUTPUT_DIR="build/app/outputs/flutter-apk"
 APK_SPLIT_PER_ABI="${APK_SPLIT_PER_ABI:-1}"
 DEFAULT_SPLIT_ABI="arm64-v8a"
+APK_TARGET_PLATFORM="${APK_TARGET_PLATFORM:-android-arm64}"
 DRY_RUN=""
 REQUESTED_BUILD_NUMBER=""
 BUILD_METADATA_FILE="${BUILD_METADATA_FILE:-}"
@@ -141,6 +142,7 @@ declare -a ABI_OUTPUTS=()
 BUILD_ARGS=(
   apk
   --release
+  --target-platform="$APK_TARGET_PLATFORM"
   --dart-define=APP_ENV="$APP_ENV"
   --build-name="$BUILD_NAME"
   --build-number="$BUILD_NUMBER"
@@ -150,8 +152,6 @@ if [[ "$APK_SPLIT_PER_ABI" == "1" ]]; then
   BUILD_ARGS+=(--split-per-abi)
   ABI_OUTPUTS=(
     "arm64-v8a:app-arm64-v8a-release.apk"
-    "armeabi-v7a:app-armeabi-v7a-release.apk"
-    "x86_64:app-x86_64-release.apk"
   )
   APK_FILENAME="app-${DEFAULT_SPLIT_ABI}-release.apk"
 else
@@ -167,6 +167,7 @@ echo "Release tag  : ${RELEASE_TAG:-<none>}"
 echo "APK file     : $APK_RELATIVE_PATH"
 echo "Output dir   : $OUTPUT_DIR"
 echo "Split per ABI: $APK_SPLIT_PER_ABI"
+echo "Target ABI   : $APK_TARGET_PLATFORM"
 echo ""
 
 write_metadata() {
