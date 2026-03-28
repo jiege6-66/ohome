@@ -127,6 +127,15 @@ jobs:
           EOF
           cp "$MANIFEST_ASSET" "$VERSIONED_MANIFEST_ASSET"
 
+      - name: Verify APK internal version
+        shell: bash
+        run: |
+          APK_PATH="app/build/app/outputs/flutter-apk/ohome-release-arm64-v8a.apk"
+          bash scripts/verify-android-apk-version.sh \
+            "$APK_PATH" \
+            "${BUILD_NAME}" \
+            "${BUILD_NUMBER}"
+
       - name: Ensure AWS CLI
         shell: bash
         run: |
