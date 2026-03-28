@@ -77,7 +77,6 @@ class _ResourceCardPageState extends State<ResourceCardPage> {
   bool _entriesReadyRunning = false;
   bool _loadMoreCheckScheduled = false;
   bool _cardActionsVisible = false;
-  bool _selectionMode = false;
   bool _renameMode = false;
   bool _renaming = false;
   bool _deletingSelected = false;
@@ -210,10 +209,8 @@ class _ResourceCardPageState extends State<ResourceCardPage> {
       final selectedPaths = _visibleSelectedPaths(entries);
       final selectedCount = selectedPaths.length;
       final actionDisabled = loading || _operationInProgress;
-      final idleCardActionsVisible =
-          _cardActionsVisible && !_selectionMode && !_renameMode;
-      final sortDisabled =
-          actionDisabled || loadingMore || _selectionMode || _renameMode;
+      final idleCardActionsVisible = _cardActionsVisible && !_renameMode;
+      final sortDisabled = actionDisabled || loadingMore || _renameMode;
 
       return Scaffold(
         appBar: AppBar(
@@ -255,22 +252,8 @@ class _ResourceCardPageState extends State<ResourceCardPage> {
                 onPressed:
                     entries.isEmpty || actionDisabled || selectedCount == 0
                     ? null
-                    : _enterSelectionMode,
-                child: const Text('删除'),
-              ),
-            if (widget.enableDelete && _selectionMode)
-              TextButton(
-                style: _deleteActionButtonStyle,
-                onPressed: actionDisabled || selectedCount == 0
-                    ? null
                     : _confirmDeleteSelected,
-                child: Text('删除($selectedCount)'),
-              ),
-            if (widget.enableDelete && _selectionMode)
-              TextButton(
-                style: _cancelActionButtonStyle,
-                onPressed: actionDisabled ? null : _exitSelectionMode,
-                child: const Text('取消'),
+                child: const Text('删除'),
               ),
             if (widget.enableMove && idleCardActionsVisible)
               TextButton(
@@ -537,26 +520,6 @@ class _ResourceCardPageState extends State<ResourceCardPage> {
     );
   }
 
-  void _enterSelectionMode() {
-    if (!widget.enableDelete || _selectionMode || _operationInProgress) return;
-    if (_selectedPaths.isEmpty) {
-      Get.snackbar('提示', '请先选择要删除的资源');
-      return;
-    }
-    setState(() {
-      _cardActionsVisible = true;
-      _selectionMode = true;
-      _renameMode = false;
-    });
-  }
-
-  void _exitSelectionMode() {
-    if (!_selectionMode) return;
-    setState(() {
-      _selectionMode = false;
-    });
-  }
-
   void _enterRenameMode() {
     if (!widget.enableRename || _renameMode || _operationInProgress) return;
     if (_selectedPaths.length != 1) {
@@ -566,7 +529,6 @@ class _ResourceCardPageState extends State<ResourceCardPage> {
     setState(() {
       _cardActionsVisible = true;
       _renameMode = true;
-      _selectionMode = false;
     });
   }
 
@@ -578,15 +540,11 @@ class _ResourceCardPageState extends State<ResourceCardPage> {
   }
 
   void _hideCardActions() {
-    if (!_cardActionsVisible &&
-        !_selectionMode &&
-        !_renameMode &&
-        _selectedPaths.isEmpty) {
+    if (!_cardActionsVisible && !_renameMode && _selectedPaths.isEmpty) {
       return;
     }
     setState(() {
       _cardActionsVisible = false;
-      _selectionMode = false;
       _renameMode = false;
       _selectedPaths.clear();
     });
@@ -618,7 +576,6 @@ class _ResourceCardPageState extends State<ResourceCardPage> {
         _selectedPaths.add(path);
       }
       if (_selectedPaths.isEmpty) {
-        _selectionMode = false;
         _renameMode = false;
       }
     });
@@ -757,7 +714,8 @@ class _ResourceCardPageState extends State<ResourceCardPage> {
     setState(() {
       _selectedPaths.removeAll(result.successPaths.map((path) => path.trim()));
       if (_selectedPaths.isEmpty) {
-        _selectionMode = false;
+        _cardActionsVisible = false;
+        _renameMode = false;
       }
     });
   }
@@ -1019,7 +977,7 @@ class _ResourceCardPageState extends State<ResourceCardPage> {
     final highlightColor = Theme.of(context).colorScheme.primary;
     final renameColor = Theme.of(context).colorScheme.secondary;
     final deletingColor = Theme.of(context).colorScheme.error;
-    final selectionActive = _cardActionsVisible || _selectionMode;
+    final selectionActive = _cardActionsVisible;
     final borderColor = deleting
         ? deletingColor.withValues(alpha: 0.9)
         : (selected
@@ -1089,7 +1047,6 @@ class _ResourceCardPageState extends State<ResourceCardPage> {
                   if (path.isEmpty) return;
                   setState(() {
                     _cardActionsVisible = true;
-                    _selectionMode = false;
                     _renameMode = false;
                     _selectedPaths
                       ..clear()
