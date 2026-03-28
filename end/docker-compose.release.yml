@@ -4,6 +4,7 @@ services:
     container_name: ohome-server
     environment:
       GIN_MODE: release
+      MODE_DEVELOP: ${OHOME_MODE_DEVELOP:-false}
       PORT: 18090
     volumes:
       - /opt/ohome/conf:/app/conf

@@ -4,6 +4,7 @@ services:
     container_name: ohome-server
     environment:
       GIN_MODE: release
+      MODE_DEVELOP: ${OHOME_MODE_DEVELOP:-false}
       PORT: 18090
       UPDATE_UPDATER_BASEURL: http://updater:18091
       UPDATE_UPDATER_TOKEN: ${OHOME_UPDATER_TOKEN:-ohome-local-updater}
