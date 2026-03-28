@@ -6,6 +6,7 @@ CONF_DIR="$APP_DIR/conf"
 CONFIG_PATH="$CONF_DIR/config.yaml"
 DEFAULT_CONFIG_PATH="$APP_DIR/defaults/config.yaml"
 export OHOME_BASE_DIR="$APP_DIR"
+export MODE_DEVELOP="${MODE_DEVELOP:-false}"
 
 mkdir -p "$CONF_DIR" "$APP_DIR/data" "$APP_DIR/log"
 

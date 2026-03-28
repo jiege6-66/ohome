@@ -43,7 +43,7 @@ RUN apk add --no-cache ca-certificates tzdata && mkdir -p /app/bin /app/conf /ap
 COPY --from=builder /app/bin/ohome /app/bin/server
 COPY --from=builder /app/bin/ohome-launcher /app/launcher
 COPY --from=builder /app/sql /app/sql
-COPY --from=builder /app/conf/config.yaml /app/defaults/config.yaml
+COPY --from=builder /app/conf/config.release.yaml /app/defaults/config.yaml
 COPY docker-entrypoint.sh /app/docker-entrypoint.sh
 
 RUN printf "%s" "$VERSION" > /app/bin/server.version && chmod +x /app/docker-entrypoint.sh /app/launcher /app/bin/server
