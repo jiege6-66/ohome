@@ -6,6 +6,8 @@ import "time"
 type QuarkAutoSaveTask struct {
 	CommonModel
 
+	OwnerUserID uint `json:"ownerUserId" gorm:"not null;default:0;index"`
+
 	TaskName string `json:"taskName" gorm:"size:100;not null"`
 	ShareURL string `json:"shareUrl" gorm:"size:1000;not null"`
 	SavePath string `json:"savePath" gorm:"size:255;not null"`

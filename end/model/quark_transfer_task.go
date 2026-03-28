@@ -3,6 +3,7 @@ package model
 import "time"
 
 const (
+	QuarkTransferTaskStatusQueued     = "queued"
 	QuarkTransferTaskStatusProcessing = "processing"
 	QuarkTransferTaskStatusSuccess    = "success"
 	QuarkTransferTaskStatusFailed     = "failed"
@@ -24,7 +25,7 @@ type QuarkTransferTask struct {
 	Application   string     `json:"application" gorm:"size:100;not null;default:''"`
 	SourceType    string     `json:"sourceType" gorm:"size:50;not null;default:''"`
 	SourceTaskID  *uint      `json:"sourceTaskId"`
-	Status        string     `json:"status" gorm:"size:50;not null;default:'processing'"`
+	Status        string     `json:"status" gorm:"size:50;not null;default:'queued'"`
 	ResultMessage string     `json:"resultMessage" gorm:"size:500;not null;default:''"`
 	SavedCount    int        `json:"savedCount" gorm:"not null;default:0"`
 	StartedAt     *time.Time `json:"startedAt"`

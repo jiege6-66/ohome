@@ -3,10 +3,13 @@ package service
 import (
 	"errors"
 	"fmt"
+	"ohome/global"
 	"ohome/model"
 	"ohome/service/dto"
 	"ohome/utils"
 	"strings"
+
+	"gorm.io/gorm"
 
 	"github.com/spf13/viper"
 )
@@ -60,7 +63,11 @@ func (m *UserService) Register(iUserRegisterDTO *dto.UserRegisterDTO) error {
 	if strings.TrimSpace(iUserRegisterDTO.Password) == "" {
 		return errors.New("密码不能为空")
 	}
-	if userDao.CheckUserNameExist(name) {
+	exists, err := userDao.ExistsByName(name, 0)
+	if err != nil {
+		return err
+	}
+	if exists {
 		return errors.New("用户名已存在")
 	}
 
@@ -82,8 +89,13 @@ func (m *UserService) Register(iUserRegisterDTO *dto.UserRegisterDTO) error {
 }
 
 func (m *UserService) AddUser(iUserAddDTO *dto.UserAddDTO) error {
-	if userDao.CheckUserNameExist(iUserAddDTO.Name) {
-		return errors.New("user Name Exist")
+	iUserAddDTO.Name = strings.TrimSpace(iUserAddDTO.Name)
+	exists, err := userDao.ExistsByName(iUserAddDTO.Name, 0)
+	if err != nil {
+		return err
+	}
+	if exists {
+		return errors.New("用户名已存在")
 	}
 	role, err := m.resolveRoleByCode(iUserAddDTO.RoleCode, model.RoleCodeUser)
 	if err != nil {
@@ -95,14 +107,29 @@ func (m *UserService) AddUser(iUserAddDTO *dto.UserAddDTO) error {
 }
 
 func (m *UserService) DeleteUserById(iCommonIDDTO *dto.CommonIDDTO, loginUser model.LoginUser) error {
-	target, err := userDao.GetUserById(iCommonIDDTO.ID)
-	if err != nil {
-		return err
+	if iCommonIDDTO.ID == 0 {
+		return errors.New("invalid User ID")
 	}
-	if err := m.ensureCanDeleteUser(target, loginUser); err != nil {
-		return err
-	}
-	return userDao.DeleteUserById(iCommonIDDTO.ID)
+
+	return global.DB.Transaction(func(tx *gorm.DB) error {
+		target, err := userDao.GetUserByIdWithDB(tx, iCommonIDDTO.ID)
+		if err != nil {
+			return err
+		}
+		if target.ID == loginUser.ID {
+			return errors.New("不能删除当前登录账号")
+		}
+		if target.Role.IsSuperAdmin() {
+			total, err := userDao.CountByRoleCodeForUpdate(tx, model.RoleCodeSuperAdmin, 0)
+			if err != nil {
+				return err
+			}
+			if total <= 1 {
+				return errors.New("至少需要保留一个超级管理员")
+			}
+		}
+		return userDao.DeleteUserByIdWithDB(tx, iCommonIDDTO.ID)
+	})
 }
 
 func (m *UserService) UpdateUser(iUserUpdateDTO *dto.UserUpdateDTO, loginUser model.LoginUser) error {
@@ -110,26 +137,49 @@ func (m *UserService) UpdateUser(iUserUpdateDTO *dto.UserUpdateDTO, loginUser mo
 		return errors.New("invalid User ID")
 	}
 
-	currentUser, err := userDao.GetUserById(iUserUpdateDTO.ID)
-	if err != nil {
-		return err
-	}
-
-	nextRole := currentUser.Role
-	if iUserUpdateDTO.RoleCode != "" {
-		role, err := m.resolveRoleByCode(iUserUpdateDTO.RoleCode, currentUser.Role.Code)
+	return global.DB.Transaction(func(tx *gorm.DB) error {
+		currentUser, err := userDao.GetUserByIdWithDB(tx, iUserUpdateDTO.ID)
 		if err != nil {
 			return err
 		}
-		nextRole = role
-	}
 
-	if err := m.ensureCanDowngradeSuperAdmin(currentUser, nextRole); err != nil {
-		return err
-	}
+		nextRole := currentUser.Role
+		if iUserUpdateDTO.RoleCode != "" {
+			role, err := m.resolveRoleByCode(iUserUpdateDTO.RoleCode, currentUser.Role.Code)
+			if err != nil {
+				return err
+			}
+			nextRole = role
+		}
 
-	iUserUpdateDTO.RoleID = nextRole.ID
-	return userDao.UpdateUser(iUserUpdateDTO)
+		if currentUser.Role.IsSuperAdmin() && !nextRole.IsSuperAdmin() {
+			total, err := userDao.CountByRoleCodeForUpdate(tx, model.RoleCodeSuperAdmin, 0)
+			if err != nil {
+				return err
+			}
+			if total <= 1 {
+				return errors.New("至少需要保留一个超级管理员")
+			}
+		}
+
+		if name := strings.TrimSpace(iUserUpdateDTO.Name); name != "" {
+			exists, err := userDao.ExistsByNameWithDB(tx, name, currentUser.ID)
+			if err != nil {
+				return err
+			}
+			if exists {
+				return errors.New("用户名已存在")
+			}
+			iUserUpdateDTO.Name = name
+		}
+
+		iUserUpdateDTO.RealName = strings.TrimSpace(iUserUpdateDTO.RealName)
+		iUserUpdateDTO.Avatar = strings.TrimSpace(iUserUpdateDTO.Avatar)
+		iUserUpdateDTO.RoleID = nextRole.ID
+		iUserUpdateDTO.ConvertToModel(&currentUser)
+		currentUser.RoleID = nextRole.ID
+		return userDao.UpdateUserByModelWithDB(tx, &currentUser)
+	})
 }
 
 func (m *UserService) GetUserById(iCommonIDDTO *dto.CommonIDDTO) (model.User, error) {
@@ -218,35 +268,4 @@ func (m *UserService) resolveRoleByCode(roleCode string, defaultCode string) (mo
 		return model.Role{}, errors.New("角色不存在")
 	}
 	return role, nil
-}
-
-func (m *UserService) ensureCanDeleteUser(target model.User, loginUser model.LoginUser) error {
-	if target.ID != 0 && target.ID == loginUser.ID {
-		return errors.New("不能删除当前登录账号")
-	}
-	if !target.Role.IsSuperAdmin() {
-		return nil
-	}
-	total, err := userDao.CountByRoleCode(model.RoleCodeSuperAdmin, target.ID)
-	if err != nil {
-		return err
-	}
-	if total == 0 {
-		return errors.New("至少需要保留一个超级管理员")
-	}
-	return nil
-}
-
-func (m *UserService) ensureCanDowngradeSuperAdmin(currentUser model.User, nextRole model.Role) error {
-	if !currentUser.Role.IsSuperAdmin() || nextRole.IsSuperAdmin() {
-		return nil
-	}
-	total, err := userDao.CountByRoleCode(model.RoleCodeSuperAdmin, currentUser.ID)
-	if err != nil {
-		return err
-	}
-	if total == 0 {
-		return errors.New("至少需要保留一个超级管理员")
-	}
-	return nil
 }

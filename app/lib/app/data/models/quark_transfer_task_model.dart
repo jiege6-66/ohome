@@ -45,7 +45,9 @@ class QuarkTransferTaskModel {
 
   DateTime? get finishedAt => _parseDateTime(raw['finishedAt']);
 
-  bool get isProcessing => status == 'processing';
+  bool get isQueued => status == 'queued';
+
+  bool get isProcessing => status == 'processing' || status == 'queued';
 
   bool get isSuccess => status == 'success';
 
@@ -55,6 +57,8 @@ class QuarkTransferTaskModel {
 
   String get statusLabel {
     switch (status) {
+      case 'queued':
+        return '排队中';
       case 'processing':
         return '转存中';
       case 'success':

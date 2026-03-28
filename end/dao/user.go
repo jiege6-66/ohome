@@ -1,9 +1,14 @@
 package dao
 
 import (
+	"errors"
 	"ohome/global"
 	"ohome/model"
 	"ohome/service/dto"
+	"strings"
+
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type UserDao struct {
@@ -11,31 +16,46 @@ type UserDao struct {
 }
 
 func (m *UserDao) CheckUserNameExist(stUserName string) bool {
-	var nTotal int64
-	var iUser model.User
-	global.DB.Model(&iUser).Where("name = ? ", stUserName).
-		Count(&nTotal)
+	exists, _ := m.ExistsByName(stUserName, 0)
+	return exists
+}
 
-	return nTotal > 0
+func (m *UserDao) ExistsByName(stUserName string, excludeUserID uint) (bool, error) {
+	return m.ExistsByNameWithDB(global.DB, stUserName, excludeUserID)
+}
+
+func (m *UserDao) ExistsByNameWithDB(db *gorm.DB, stUserName string, excludeUserID uint) (bool, error) {
+	var nTotal int64
+	query := db.Model(&model.User{}).Where("name = ?", strings.TrimSpace(stUserName))
+	if excludeUserID != 0 {
+		query = query.Where("id <> ?", excludeUserID)
+	}
+	if err := query.Count(&nTotal).Error; err != nil {
+		return false, err
+	}
+	return nTotal > 0, nil
 }
 
 func (m *UserDao) AddUser(iUserAddDTO *dto.UserAddDTO) error {
 	var iUser model.User
 	iUserAddDTO.ConvertToModel(&iUser)
 
-	err := global.DB.Save(&iUser).Error
+	err := normalizeUserMutationError(global.DB.Create(&iUser).Error)
 	if err != nil {
 		return err
-	} else {
-		iUserAddDTO.ID = iUser.ID
-		iUserAddDTO.Password = ""
-		return nil
 	}
 
+	iUserAddDTO.ID = iUser.ID
+	iUserAddDTO.Password = ""
+	return nil
 }
 
 func (m *UserDao) DeleteUserById(id uint) error {
-	return global.DB.Delete(&model.User{}, id).Error
+	return m.DeleteUserByIdWithDB(global.DB, id)
+}
+
+func (m *UserDao) DeleteUserByIdWithDB(db *gorm.DB, id uint) error {
+	return db.Delete(&model.User{}, id).Error
 }
 
 func (m *UserDao) UpdateUser(iUserUpdateDTO *dto.UserUpdateDTO) error {
@@ -46,16 +66,24 @@ func (m *UserDao) UpdateUser(iUserUpdateDTO *dto.UserUpdateDTO) error {
 	}
 	iUserUpdateDTO.ConvertToModel(&iUser)
 
-	return global.DB.Omit("Role").Save(&iUser).Error
+	return normalizeUserMutationError(global.DB.Omit("Role").Save(&iUser).Error)
 }
 
 func (m *UserDao) UpdateUserByModel(iModelUser *model.User) error {
-	return global.DB.Omit("Role").Save(iModelUser).Error
+	return m.UpdateUserByModelWithDB(global.DB, iModelUser)
+}
+
+func (m *UserDao) UpdateUserByModelWithDB(db *gorm.DB, iModelUser *model.User) error {
+	return normalizeUserMutationError(db.Omit("Role").Save(iModelUser).Error)
 }
 
 func (m *UserDao) GetUserById(id uint) (model.User, error) {
+	return m.GetUserByIdWithDB(global.DB, id)
+}
+
+func (m *UserDao) GetUserByIdWithDB(db *gorm.DB, id uint) (model.User, error) {
 	var iUser model.User
-	err := global.DB.Preload("Role").First(&iUser, id).Error
+	err := db.Preload("Role").First(&iUser, id).Error
 	return iUser, err
 }
 
@@ -63,21 +91,23 @@ func (m *UserDao) GetUserList(iUserListDTO *dto.UserListDTO) ([]model.User, int6
 	var giUserList []model.User
 	var nTotal int64
 
-	query := global.DB.Model(&model.User{}).
-		Preload("Role").
-		Scopes(Paginate(iUserListDTO.Paginate))
+	filtered := global.DB.Model(&model.User{}).Preload("Role")
 
 	if iUserListDTO.Name != "" {
-		query = query.Where("name like ?", "%"+iUserListDTO.Name+"%")
+		filtered = filtered.Where("name like ?", "%"+iUserListDTO.Name+"%")
 	}
 
-	err := query.Find(&giUserList).Error
-	if err != nil {
-		return giUserList, 0, err
+	if err := filtered.Count(&nTotal).Error; err != nil {
+		return nil, 0, err
 	}
-	err = query.Offset(-1).Limit(-1).Count(&nTotal).Error
+	if err := filtered.
+		Order("id asc").
+		Scopes(Paginate(iUserListDTO.Paginate)).
+		Find(&giUserList).Error; err != nil {
+		return nil, 0, err
+	}
 
-	return giUserList, nTotal, err
+	return giUserList, nTotal, nil
 }
 
 func (m *UserDao) GetUserByName(stUserName string) (model.User, error) {
@@ -103,13 +133,84 @@ func (m *UserDao) GetLoginUserByID(id uint) (model.LoginUser, error) {
 }
 
 func (m *UserDao) CountByRoleCode(roleCode string, excludeUserID uint) (int64, error) {
+	return m.countByRoleCode(global.DB, roleCode, excludeUserID, false)
+}
+
+func (m *UserDao) CountByRoleCodeForUpdate(db *gorm.DB, roleCode string, excludeUserID uint) (int64, error) {
+	return m.countByRoleCode(db, roleCode, excludeUserID, true)
+}
+
+func (m *UserDao) GetPreferredTaskOwnerID() (uint, error) {
+	type row struct {
+		ID uint `gorm:"column:id"`
+	}
+
+	var preferred row
+	err := global.DB.Model(&model.User{}).
+		Select("sys_user.id").
+		Joins("JOIN sys_role ON sys_role.id = sys_user.role_id").
+		Where("sys_role.code = ?", model.RoleCodeSuperAdmin).
+		Order("sys_user.id asc").
+		Take(&preferred).Error
+	switch {
+	case err == nil && preferred.ID != 0:
+		return preferred.ID, nil
+	case err != nil && !errors.Is(err, gorm.ErrRecordNotFound):
+		return 0, err
+	}
+
+	preferred = row{}
+	err = global.DB.Model(&model.User{}).
+		Select("id").
+		Order("id asc").
+		Take(&preferred).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, err
+	}
+	return preferred.ID, nil
+}
+
+func (m *UserDao) countByRoleCode(db *gorm.DB, roleCode string, excludeUserID uint, lock bool) (int64, error) {
 	var total int64
-	query := global.DB.Model(&model.User{}).
+	query := db.Model(&model.User{}).
 		Joins("JOIN sys_role ON sys_role.id = sys_user.role_id").
 		Where("sys_role.code = ?", roleCode)
+	if lock {
+		query = query.Clauses(clause.Locking{Strength: "UPDATE"})
+	}
 	if excludeUserID != 0 {
 		query = query.Where("sys_user.id <> ?", excludeUserID)
 	}
 	err := query.Count(&total).Error
 	return total, err
+}
+
+func normalizeUserMutationError(err error) error {
+	if err == nil {
+		return nil
+	}
+	if isDuplicateUserNameError(err) {
+		return errors.New("用户名已存在")
+	}
+	return err
+}
+
+func isDuplicateUserNameError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	message := strings.ToLower(strings.TrimSpace(err.Error()))
+	if message == "" {
+		return false
+	}
+
+	return ((strings.Contains(message, "duplicate entry") || strings.Contains(message, "duplicated key")) &&
+		(strings.Contains(message, "uk_sys_user_name") || strings.Contains(message, "name"))) ||
+		strings.Contains(message, "unique constraint failed: sys_user.name") ||
+		strings.Contains(message, "unique constraint failed: user.name") ||
+		strings.Contains(message, "uk_sys_user_name")
 }
