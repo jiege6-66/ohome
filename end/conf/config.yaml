@@ -40,14 +40,8 @@ quark:
 
 update:
   channel: stable
-  manifestUrl: https://github.com/leftScience/ohome/releases/latest/download/server-manifest.json
+  manifestUrl: ""
   updater:
     token: ohome-local-updater
-    listenAddr: :18091
-    baseUrl: http://updater:18091
-  docker:
-    composeProjectDir: .
-    composeFile: docker-compose.release.yml
-    envFile: .env
-    serviceName: server
-    imageEnvName: OHOME_SERVER_IMAGE
+    listenAddr: 127.0.0.1:18091
+    baseUrl: http://127.0.0.1:18091

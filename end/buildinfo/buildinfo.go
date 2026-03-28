@@ -3,10 +3,11 @@ package buildinfo
 import "strings"
 
 var (
-	Version   = "0.0.1"
-	Commit    = "dev"
-	BuildTime = ""
-	Channel   = "stable"
+	Version        = "0.0.1"
+	Commit         = "dev"
+	BuildTime      = ""
+	Channel        = "stable"
+	RuntimeVersion = "runtime-dev"
 )
 
 func CleanVersion() string {
@@ -23,4 +24,12 @@ func CleanChannel() string {
 		return "stable"
 	}
 	return channel
+}
+
+func CleanRuntimeVersion() string {
+	runtimeVersion := strings.TrimSpace(RuntimeVersion)
+	if runtimeVersion == "" {
+		return "runtime-dev"
+	}
+	return runtimeVersion
 }

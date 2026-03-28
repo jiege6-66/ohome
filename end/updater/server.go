@@ -14,7 +14,14 @@ type APIServer struct {
 }
 
 func NewAPIServer() *APIServer {
-	return &APIServer{manager: NewManager()}
+	return NewAPIServerWithManager(NewManager(nil))
+}
+
+func NewAPIServerWithManager(manager *Manager) *APIServer {
+	if manager == nil {
+		manager = NewManager(nil)
+	}
+	return &APIServer{manager: manager}
 }
 
 func (s *APIServer) Run() error {

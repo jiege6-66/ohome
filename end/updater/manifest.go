@@ -9,6 +9,9 @@ import (
 )
 
 func FetchManifest(url string) (ServerManifest, error) {
+	if strings.TrimSpace(url) == "" {
+		return ServerManifest{}, fmt.Errorf("未配置更新清单地址")
+	}
 	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Get(strings.TrimSpace(url))
 	if err != nil {

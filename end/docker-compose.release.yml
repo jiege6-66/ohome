@@ -1,11 +1,12 @@
 services:
   server:
-    image: ${OHOME_SERVER_IMAGE:-hanlinwang0606/ohome:latest}
+    image: ${OHOME_RUNTIME_IMAGE:-hanlinwang0606/ohome:runtime-v2026.03.1}
     container_name: ohome-server
     environment:
       GIN_MODE: release
       PORT: 18090
-      UPDATE_UPDATER_BASEURL: http://updater:18091
+      UPDATE_MANIFESTURL: ${OHOME_SERVER_MANIFEST_URL:-https://your-minio.example.com/ohome/server/server.json}
+      UPDATE_UPDATER_BASEURL: http://127.0.0.1:18091
       UPDATE_UPDATER_TOKEN: ${OHOME_UPDATER_TOKEN:-ohome-local-updater}
     volumes:
       - /opt/ohome/conf:/app/conf
@@ -13,23 +14,4 @@ services:
       - /opt/ohome/log:/app/log
     ports:
       - "18090:18090"
-    restart: unless-stopped
-
-  updater:
-    image: ${OHOME_UPDATER_IMAGE:-hanlinwang0606/ohome-updater:latest}
-    container_name: ohome-updater
-    environment:
-      UPDATE_UPDATER_LISTENADDR: :18091
-      UPDATE_UPDATER_TOKEN: ${OHOME_UPDATER_TOKEN:-ohome-local-updater}
-      UPDATE_DOCKER_COMPOSEPROJECTDIR: /workspace
-      UPDATE_DOCKER_COMPOSEFILE: docker-compose.release.yml
-      UPDATE_DOCKER_ENVFILE: .env
-      UPDATE_DOCKER_SERVICENAME: server
-      UPDATE_HEALTHURL: http://server:18090/api/v1/public/discovery
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - /opt/ohome:/workspace
-      - /opt/ohome/conf:/app/conf
-      - /opt/ohome/data:/app/data
-      - /opt/ohome/log:/app/log
     restart: unless-stopped

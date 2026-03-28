@@ -75,46 +75,31 @@
 - 发现接口：`http://<你的主机IP>:18090/api/v1/public/discovery`
 - Swagger：`http://127.0.0.1:18090/swagger/index.html`
 
-### 服务端 Docker Hub 镜像部署（Docker + updater sidecar）
+### 服务端 Docker Hub 镜像部署（单容器 + 容器内二进制自更新）
 
 Docker Hub 仓库：`hanlinwang0606/ohome`
 
-推荐直接使用仓库中的 [`end/docker-compose.release.yml`](./end/docker-compose.release.yml)。它会同时启动：
-
-- `server`：主服务
-- `updater`：本地更新执行器 sidecar
+推荐直接使用仓库中的 [`end/docker-compose.release.yml`](./end/docker-compose.release.yml)。它只启动一个 `server` 容器，容器内由 `launcher` 管理实际业务进程，并通过 OSS/MinIO 上的 Linux 二进制包完成更新。
 
 示例：
 
 ```yaml
 services:
   server:
-    image: ${OHOME_SERVER_IMAGE:-hanlinwang0606/ohome:latest}
+    image: ${OHOME_RUNTIME_IMAGE:-hanlinwang0606/ohome:runtime-v2026.03.1}
     container_name: ohome-server
     environment:
       GIN_MODE: release
       PORT: 18090
-      UPDATE_UPDATER_BASEURL: http://updater:18091
+      UPDATE_MANIFESTURL: ${OHOME_SERVER_MANIFEST_URL:-https://your-minio.example.com/ohome/server/server.json}
+      UPDATE_UPDATER_BASEURL: http://127.0.0.1:18091
+      UPDATE_UPDATER_TOKEN: ${OHOME_UPDATER_TOKEN:-ohome-local-updater}
     volumes:
       - /opt/ohome/conf:/app/conf
       - /opt/ohome/data:/app/data
       - /opt/ohome/log:/app/log
     ports:
       - "18090:18090"
-    restart: unless-stopped
-
-  updater:
-    image: ${OHOME_UPDATER_IMAGE:-hanlinwang0606/ohome-updater:latest}
-    container_name: ohome-updater
-    environment:
-      UPDATE_UPDATER_LISTENADDR: :18091
-      UPDATE_DEPLOYMODE: docker
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - /opt/ohome:/workspace
-      - /opt/ohome/conf:/app/conf
-      - /opt/ohome/data:/app/data
-      - /opt/ohome/log:/app/log
     restart: unless-stopped
 ```
 
@@ -128,7 +113,17 @@ docker compose -f docker-compose.release.yml pull
 docker compose -f docker-compose.release.yml up -d
 ```
 
-Docker 更新依赖 sidecar，因此不再推荐仅用单独的 `docker run` 启动主服务。
+发布模型已经拆分为两条线：
+
+- 业务版本：tag 触发，构建 `linux-amd64` / `linux-arm64` 二进制并上传到 OSS/MinIO
+- Docker runtime 镜像：手动触发 GitHub Action，仅在 launcher、基础镜像或运行时底座变化时发布
+- runtime 基线版本统一记录在 [`end/runtime-version.txt`](./end/runtime-version.txt)，`server-binary-release.yml` 会用它填充 `minRuntimeVersion/recommendedRuntimeVersion`
+
+服务端自动更新依赖 `UPDATE_MANIFESTURL` 指向的滚动清单，例如：`https://<你的 MinIO 域名>/server/server.json`。
+
+手动发布 runtime 镜像时，`docker-runtime-release.yml` 的 `runtime_version` 输入需要与 [`end/runtime-version.txt`](./end/runtime-version.txt) 保持一致。
+
+如果你还需要旧的 sidecar 双容器部署，可参考 [`end/docker-compose.legacy.yml`](./end/docker-compose.legacy.yml)。
 
 ### 服务端更新接口与客户端入口
 
@@ -139,8 +134,8 @@ Docker 更新依赖 sidecar，因此不再推荐仅用单独的 `docker run` 启
   - `GET /api/v1/system/update/tasks/:taskId`
   - `POST /api/v1/system/update/rollback`
 - Flutter 客户端入口：`设置 → 服务端更新`
-- 发布清单：`server-manifest.json`
-- 当前仅支持 Docker 部署链路更新，不再提供 Windows/macOS 服务端便携包
+- 滚动清单：`server/server.json`
+- 版本化清单：`server/releases/<tag>/server.json`
 
 ### 服务端配置说明
 
@@ -154,6 +149,8 @@ Docker 更新依赖 sidecar，因此不再推荐仅用单独的 `docker run` 启
 - `jwt.signKey`：JWT 签名密钥
 - `config.defaultPassword`：重置密码后的默认密码
 - `drops.itemReminderDays` / `drops.eventReminderDays`：提醒提前天数
+- `update.manifestUrl`：服务端滚动更新清单地址
+- `update.updater.baseUrl`：服务端访问本机 launcher 控制面的地址，默认 `http://127.0.0.1:18091`
 
 如果你想改端口或数据库，优先改这个配置文件。  
 后端也支持通过环境变量覆盖部分配置，环境变量命名遵循 Viper 规则，例如：

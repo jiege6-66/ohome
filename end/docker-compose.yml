@@ -7,8 +7,11 @@ services:
     environment:
       GIN_MODE: release
       PORT: 18090
+      UPDATE_UPDATER_BASEURL: http://127.0.0.1:18091
+      UPDATE_UPDATER_TOKEN: ${OHOME_UPDATER_TOKEN:-ohome-local-updater}
+      UPDATE_MANIFESTURL: ${OHOME_SERVER_MANIFEST_URL:-}
     volumes:
-      - /opt/ohome/conf/config.yaml:/app/conf/config.yaml:ro
+      - /opt/ohome/conf:/app/conf
       - /opt/ohome/data:/app/data
       - /opt/ohome/log:/app/log
     ports:

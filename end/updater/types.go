@@ -5,6 +5,7 @@ import "time"
 type DeployMode string
 
 const (
+	DeployModeBinary DeployMode = "binary"
 	DeployModeDocker DeployMode = "docker"
 )
 
@@ -26,12 +27,20 @@ type DockerRelease struct {
 	Tag   string `json:"tag"`
 }
 
+type BinaryArtifact struct {
+	URL    string `json:"url"`
+	SHA256 string `json:"sha256"`
+}
+
 type ServerManifest struct {
-	Channel      string        `json:"channel"`
-	Version      string        `json:"version"`
-	ReleaseNotes string        `json:"releaseNotes"`
-	PublishedAt  string        `json:"publishedAt"`
-	Docker       DockerRelease `json:"docker"`
+	Channel                   string                    `json:"channel"`
+	Version                   string                    `json:"version"`
+	ReleaseNotes              string                    `json:"releaseNotes"`
+	PublishedAt               string                    `json:"publishedAt"`
+	MinRuntimeVersion         string                    `json:"minRuntimeVersion,omitempty"`
+	RecommendedRuntimeVersion string                    `json:"recommendedRuntimeVersion,omitempty"`
+	Artifacts                 map[string]BinaryArtifact `json:"artifacts,omitempty"`
+	Docker                    DockerRelease             `json:"docker,omitempty"`
 }
 
 type Task struct {
@@ -51,15 +60,16 @@ type Task struct {
 }
 
 type State struct {
-	ActiveTaskID    string     `json:"activeTaskId,omitempty"`
-	LastTaskID      string     `json:"lastTaskId,omitempty"`
-	CurrentVersion  string     `json:"currentVersion,omitempty"`
-	PreviousVersion string     `json:"previousVersion,omitempty"`
-	CurrentImage    string     `json:"currentImage,omitempty"`
-	PreviousImage   string     `json:"previousImage,omitempty"`
-	CurrentTask     *Task      `json:"currentTask,omitempty"`
-	DeployMode      DeployMode `json:"deployMode,omitempty"`
-	UpdatedAt       time.Time  `json:"updatedAt"`
+	ActiveTaskID        string     `json:"activeTaskId,omitempty"`
+	LastTaskID          string     `json:"lastTaskId,omitempty"`
+	CurrentVersion      string     `json:"currentVersion,omitempty"`
+	PreviousVersion     string     `json:"previousVersion,omitempty"`
+	CurrentReleasePath  string     `json:"currentReleasePath,omitempty"`
+	PreviousReleasePath string     `json:"previousReleasePath,omitempty"`
+	RuntimeVersion      string     `json:"runtimeVersion,omitempty"`
+	CurrentTask         *Task      `json:"currentTask,omitempty"`
+	DeployMode          DeployMode `json:"deployMode,omitempty"`
+	UpdatedAt           time.Time  `json:"updatedAt"`
 }
 
 type InfoResponse struct {

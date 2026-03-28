@@ -1,0 +1,200 @@
+name: Server Binary Release
+
+on:
+  push:
+    tags:
+      - "*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-server-binaries:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Require tag ref
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF_TYPE}" != "tag" ]]; then
+            echo "This workflow must run on a tag ref."
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Read runtime version baseline
+        shell: bash
+        run: |
+          RUNTIME_VERSION="$(tr -d '\r\n' < end/runtime-version.txt)"
+          if [[ -z "${RUNTIME_VERSION}" ]]; then
+            echo "::error::end/runtime-version.txt is empty."
+            exit 1
+          fi
+          {
+            echo "MIN_RUNTIME_VERSION=${RUNTIME_VERSION}"
+            echo "RECOMMENDED_RUNTIME_VERSION=${RUNTIME_VERSION}"
+          } >> "$GITHUB_ENV"
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: end/go.mod
+          cache-dependency-path: end/go.sum
+
+      - name: Prepare MinIO settings
+        shell: bash
+        run: |
+          test -n "${{ secrets.MINIO_ENDPOINT }}"
+          test -n "${{ secrets.MINIO_ACCESS_KEY }}"
+          test -n "${{ secrets.MINIO_SECRET_KEY }}"
+          test -n "${{ secrets.MINIO_BUCKET }}"
+
+          MINIO_ENDPOINT="${{ secrets.MINIO_ENDPOINT }}"
+          MINIO_ENDPOINT="${MINIO_ENDPOINT%/}"
+          MINIO_BUCKET="${{ secrets.MINIO_BUCKET }}"
+          MINIO_PUBLIC_BASE_URL="${{ secrets.MINIO_PUBLIC_BASE_URL }}"
+          MINIO_PUBLIC_BASE_URL="${MINIO_PUBLIC_BASE_URL%/}"
+          if [[ -z "${MINIO_PUBLIC_BASE_URL}" ]]; then
+            MINIO_PUBLIC_BASE_URL="${MINIO_ENDPOINT}/${MINIO_BUCKET}"
+          fi
+
+          RELEASE_PREFIX="server/releases/${GITHUB_REF_NAME}"
+          SERVER_MANIFEST_URL="${MINIO_PUBLIC_BASE_URL}/server/server.json"
+
+          {
+            echo "MINIO_ENDPOINT=${MINIO_ENDPOINT}"
+            echo "MINIO_BUCKET=${MINIO_BUCKET}"
+            echo "MINIO_PUBLIC_BASE_URL=${MINIO_PUBLIC_BASE_URL}"
+            echo "RELEASE_PREFIX=${RELEASE_PREFIX}"
+            echo "SERVER_MANIFEST_URL=${SERVER_MANIFEST_URL}"
+          } >> "$GITHUB_ENV"
+
+      - name: Build release binaries
+        shell: bash
+        working-directory: end
+        run: |
+          mkdir -p ../dist/server-release/ohome-linux-amd64
+          mkdir -p ../dist/server-release/ohome-linux-arm64
+
+          for arch in amd64 arm64; do
+            output="../dist/server-release/ohome-linux-${arch}/server"
+            GOOS=linux GOARCH="${arch}" CGO_ENABLED=0 GOTOOLCHAIN=auto GOPROXY=https://goproxy.cn,direct \
+              go build \
+              -ldflags="-X 'ohome/buildinfo.Version=${GITHUB_REF_NAME}' -X 'ohome/buildinfo.Commit=${GITHUB_SHA}' -X 'ohome/buildinfo.BuildTime=$(date -u +"%Y-%m-%dT%H:%M:%SZ")' -X 'ohome/buildinfo.Channel=stable'" \
+              -o "${output}" .
+            chmod +x "${output}"
+          done
+
+      - name: Package release assets
+        shell: bash
+        run: |
+          OUTPUT_DIR="dist/server-release"
+          tar -C "${OUTPUT_DIR}/ohome-linux-amd64" -czf "${OUTPUT_DIR}/ohome-linux-amd64.tar.gz" server
+          tar -C "${OUTPUT_DIR}/ohome-linux-arm64" -czf "${OUTPUT_DIR}/ohome-linux-arm64.tar.gz" server
+
+          AMD64_SHA256=$(shasum -a 256 "${OUTPUT_DIR}/ohome-linux-amd64.tar.gz" | awk '{print $1}')
+          ARM64_SHA256=$(shasum -a 256 "${OUTPUT_DIR}/ohome-linux-arm64.tar.gz" | awk '{print $1}')
+
+          {
+            echo "AMD64_SHA256=${AMD64_SHA256}"
+            echo "ARM64_SHA256=${ARM64_SHA256}"
+          } >> "$GITHUB_ENV"
+
+          cat > "${OUTPUT_DIR}/checksums-server.txt" <<EOF
+          ${AMD64_SHA256}  ohome-linux-amd64.tar.gz
+          ${ARM64_SHA256}  ohome-linux-arm64.tar.gz
+          EOF
+
+      - name: Generate server manifests
+        shell: bash
+        run: |
+          OUTPUT_DIR="dist/server-release"
+          VERSIONED_MANIFEST="${OUTPUT_DIR}/server-${GITHUB_REF_NAME}.json"
+          ROLLING_MANIFEST="${OUTPUT_DIR}/server.json"
+          AMD64_URL="${MINIO_PUBLIC_BASE_URL}/${RELEASE_PREFIX}/ohome-linux-amd64.tar.gz"
+          ARM64_URL="${MINIO_PUBLIC_BASE_URL}/${RELEASE_PREFIX}/ohome-linux-arm64.tar.gz"
+
+          VERSION="${GITHUB_REF_NAME}" \
+          CHANNEL="stable" \
+          RELEASE_NOTES="Release ${GITHUB_REF_NAME}" \
+          AMD64_URL="${AMD64_URL}" \
+          AMD64_SHA256="${AMD64_SHA256}" \
+          ARM64_URL="${ARM64_URL}" \
+          ARM64_SHA256="${ARM64_SHA256}" \
+          MIN_RUNTIME_VERSION="${MIN_RUNTIME_VERSION}" \
+          RECOMMENDED_RUNTIME_VERSION="${RECOMMENDED_RUNTIME_VERSION}" \
+          bash scripts/generate-server-binary-manifest.sh "${VERSIONED_MANIFEST}"
+
+          cp "${VERSIONED_MANIFEST}" "${ROLLING_MANIFEST}"
+
+      - name: Ensure AWS CLI
+        shell: bash
+        run: |
+          if command -v aws >/dev/null 2>&1; then
+            aws --version
+          else
+            python3 -m pip install --user awscli
+            echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+            export PATH="$HOME/.local/bin:$PATH"
+            aws --version
+          fi
+
+      - name: Upload server assets to MinIO
+        shell: bash
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.MINIO_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.MINIO_SECRET_KEY }}
+          AWS_DEFAULT_REGION: us-east-1
+          AWS_EC2_METADATA_DISABLED: "true"
+        run: |
+          aws configure set default.s3.addressing_style path
+
+          OUTPUT_DIR="dist/server-release"
+
+          aws s3 cp "${OUTPUT_DIR}/ohome-linux-amd64.tar.gz" \
+            "s3://${MINIO_BUCKET}/${RELEASE_PREFIX}/ohome-linux-amd64.tar.gz" \
+            --endpoint-url "${MINIO_ENDPOINT}" \
+            --content-type "application/gzip" \
+            --cache-control "public,max-age=31536000,immutable"
+
+          aws s3 cp "${OUTPUT_DIR}/ohome-linux-arm64.tar.gz" \
+            "s3://${MINIO_BUCKET}/${RELEASE_PREFIX}/ohome-linux-arm64.tar.gz" \
+            --endpoint-url "${MINIO_ENDPOINT}" \
+            --content-type "application/gzip" \
+            --cache-control "public,max-age=31536000,immutable"
+
+          aws s3 cp "${OUTPUT_DIR}/server.json" \
+            "s3://${MINIO_BUCKET}/server/server.json" \
+            --endpoint-url "${MINIO_ENDPOINT}" \
+            --content-type "application/json" \
+            --cache-control "no-cache,no-store,must-revalidate"
+
+          aws s3 cp "${OUTPUT_DIR}/server-${GITHUB_REF_NAME}.json" \
+            "s3://${MINIO_BUCKET}/${RELEASE_PREFIX}/server.json" \
+            --endpoint-url "${MINIO_ENDPOINT}" \
+            --content-type "application/json" \
+            --cache-control "no-cache,no-store,must-revalidate"
+
+          aws s3 cp "${OUTPUT_DIR}/checksums-server.txt" \
+            "s3://${MINIO_BUCKET}/${RELEASE_PREFIX}/checksums-server.txt" \
+            --endpoint-url "${MINIO_ENDPOINT}" \
+            --content-type "text/plain; charset=utf-8" \
+            --cache-control "public,max-age=300"
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          generate_release_notes: true
+          overwrite_files: true
+          fail_on_unmatched_files: true
+          files: |
+            dist/server-release/ohome-linux-amd64.tar.gz
+            dist/server-release/ohome-linux-arm64.tar.gz
+            dist/server-release/server.json
+            dist/server-release/server-${{ github.ref_name }}.json
+            dist/server-release/checksums-server.txt

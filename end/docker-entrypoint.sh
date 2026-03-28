@@ -5,6 +5,7 @@ APP_DIR="/app"
 CONF_DIR="$APP_DIR/conf"
 CONFIG_PATH="$CONF_DIR/config.yaml"
 DEFAULT_CONFIG_PATH="$APP_DIR/defaults/config.yaml"
+export OHOME_BASE_DIR="$APP_DIR"
 
 mkdir -p "$CONF_DIR" "$APP_DIR/data" "$APP_DIR/log"
 
@@ -17,4 +18,4 @@ if [ ! -f "$CONFIG_PATH" ]; then
   cp "$DEFAULT_CONFIG_PATH" "$CONFIG_PATH"
 fi
 
-exec "$APP_DIR/server"
+exec "$APP_DIR/launcher"

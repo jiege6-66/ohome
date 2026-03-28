@@ -28,8 +28,22 @@ func (s *Store) TasksDir() string { return filepath.Join(s.rootDir, "tasks") }
 
 func (s *Store) StatePath() string { return filepath.Join(s.rootDir, "state.json") }
 
+func (s *Store) RuntimeRootDir() string { return filepath.Join(s.rootDir, "runtime") }
+
+func (s *Store) ReleasesDir() string { return filepath.Join(s.RuntimeRootDir(), "releases") }
+
+func (s *Store) TempDir() string { return filepath.Join(s.RuntimeRootDir(), "tmp") }
+
+func (s *Store) CurrentReleaseLink() string { return filepath.Join(s.RuntimeRootDir(), "current") }
+
 func (s *Store) ensure() error {
 	if err := os.MkdirAll(s.TasksDir(), 0o755); err != nil {
+		return err
+	}
+	if err := os.MkdirAll(s.ReleasesDir(), 0o755); err != nil {
+		return err
+	}
+	if err := os.MkdirAll(s.TempDir(), 0o755); err != nil {
 		return err
 	}
 	return nil

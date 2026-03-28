@@ -1,14 +1,12 @@
 package updater
 
 import (
-	"bufio"
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -17,13 +15,27 @@ import (
 	"ohome/global"
 )
 
-type Manager struct {
-	store *Store
-	mu    sync.Mutex
+const restartTimeout = 10 * time.Second
+
+type ProcessController interface {
+	RestartCurrentServer(timeout time.Duration) error
+	StopCurrentServer(timeout time.Duration) error
 }
 
-func NewManager() *Manager {
-	return &Manager{store: NewStore()}
+type Manager struct {
+	store      *Store
+	controller ProcessController
+	mu         sync.Mutex
+}
+
+type applyBinaryResult struct {
+	targetVersion  string
+	releasePath    string
+	autoRolledBack bool
+}
+
+func NewManager(controller ProcessController) *Manager {
+	return &Manager{store: NewStore(), controller: controller}
 }
 
 func (m *Manager) Info() (InfoResponse, error) {
@@ -67,6 +79,7 @@ func (m *Manager) Check(req CheckRequest) (CheckResponse, error) {
 func (m *Manager) Apply(req ApplyRequest) (ApplyResponse, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	state, err := m.store.LoadState()
 	if err != nil {
 		return ApplyResponse{}, err
@@ -74,6 +87,7 @@ func (m *Manager) Apply(req ApplyRequest) (ApplyResponse, error) {
 	if state.CurrentTask != nil && !state.CurrentTask.Terminal() {
 		return ApplyResponse{}, fmt.Errorf("已有更新任务正在执行")
 	}
+
 	mode := DetectDeployMode()
 	currentVersion := m.detectCurrentVersion(mode)
 	task := &Task{
@@ -91,6 +105,7 @@ func (m *Manager) Apply(req ApplyRequest) (ApplyResponse, error) {
 	state.CurrentTask = task
 	state.DeployMode = mode
 	state.CurrentVersion = currentVersion
+	state.RuntimeVersion = buildinfo.CleanRuntimeVersion()
 	if err := m.store.SaveTask(task); err != nil {
 		return ApplyResponse{}, err
 	}
@@ -104,6 +119,7 @@ func (m *Manager) Apply(req ApplyRequest) (ApplyResponse, error) {
 func (m *Manager) Rollback(req RollbackRequest) (ApplyResponse, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	state, err := m.store.LoadState()
 	if err != nil {
 		return ApplyResponse{}, err
@@ -111,9 +127,10 @@ func (m *Manager) Rollback(req RollbackRequest) (ApplyResponse, error) {
 	if state.CurrentTask != nil && !state.CurrentTask.Terminal() {
 		return ApplyResponse{}, fmt.Errorf("已有更新任务正在执行")
 	}
-	if strings.TrimSpace(state.PreviousVersion) == "" {
+	if strings.TrimSpace(state.PreviousVersion) == "" || strings.TrimSpace(state.PreviousReleasePath) == "" {
 		return ApplyResponse{}, fmt.Errorf("没有可回滚的上一个稳定版本")
 	}
+
 	mode := DetectDeployMode()
 	currentVersion := m.detectCurrentVersion(mode)
 	task := &Task{
@@ -150,43 +167,48 @@ func (m *Manager) runApplyTask(task *Task, req ApplyRequest) {
 		m.failTask(task, err)
 		return
 	}
+
 	targetVersion := strings.TrimSpace(req.TargetVersion)
 	if targetVersion == "" {
 		targetVersion = strings.TrimSpace(manifest.Version)
+	} else if CompareVersions(strings.TrimSpace(manifest.Version), targetVersion) != 0 {
+		m.failTask(task, fmt.Errorf("当前清单仅支持更新到 %s", strings.TrimSpace(manifest.Version)))
+		return
 	}
+
 	task.TargetVersion = targetVersion
 	m.advanceTask(task, StatusChecking, 8, "检查更新清单")
 	if CompareVersions(targetVersion, task.CurrentVersion) <= 0 {
 		m.failTask(task, fmt.Errorf("当前已是最新版本"))
 		return
 	}
+
 	state, _ := m.store.LoadState()
 	previousVersion := task.CurrentVersion
-	previousImage := state.CurrentImage
-	if err := m.applyDocker(task, manifest, previousImage); err != nil {
+	previousReleasePath := strings.TrimSpace(state.CurrentReleasePath)
+	result, err := m.applyBinary(task, manifest, previousReleasePath)
+	if err != nil {
 		m.failTask(task, err)
 		return
 	}
-	if task.Status == StatusRolledBack {
-		state, _ = m.store.LoadState()
-		state.ActiveTaskID = ""
-		state.CurrentTask = task
-		state.CurrentVersion = previousVersion
-		state.PreviousVersion = ""
-		state.CurrentImage = previousImage
-		state.PreviousImage = ""
-		_ = m.store.SaveState(state)
-		return
-	}
-	m.completeTask(task, StatusSuccess, 100, "更新完成", false)
+
 	state, _ = m.store.LoadState()
 	state.ActiveTaskID = ""
 	state.CurrentTask = task
-	state.CurrentVersion = targetVersion
+	state.DeployMode = DetectDeployMode()
+	state.RuntimeVersion = buildinfo.CleanRuntimeVersion()
+	if result.autoRolledBack {
+		state.CurrentVersion = previousVersion
+		state.CurrentReleasePath = previousReleasePath
+		_ = m.store.SaveState(state)
+		return
+	}
+
+	m.completeTask(task, StatusSuccess, 100, "更新完成", strings.TrimSpace(previousReleasePath) != "")
+	state.CurrentVersion = result.targetVersion
 	state.PreviousVersion = previousVersion
-	state.DeployMode = DeployModeDocker
-	state.PreviousImage = previousImage
-	state.CurrentImage = manifest.Docker.Image + ":" + manifest.Docker.Tag
+	state.CurrentReleasePath = result.releasePath
+	state.PreviousReleasePath = previousReleasePath
 	_ = m.store.SaveState(state)
 }
 
@@ -196,122 +218,133 @@ func (m *Manager) runRollbackTask(task *Task) {
 		m.failTask(task, err)
 		return
 	}
+
 	currentVersion := m.detectCurrentVersion(DetectDeployMode())
-	if strings.TrimSpace(state.PreviousImage) == "" {
-		m.failTask(task, fmt.Errorf("缺少回滚镜像信息"))
+	currentReleasePath := strings.TrimSpace(state.CurrentReleasePath)
+	previousReleasePath := strings.TrimSpace(state.PreviousReleasePath)
+	previousVersion := strings.TrimSpace(state.PreviousVersion)
+	if previousReleasePath == "" || previousVersion == "" {
+		m.failTask(task, fmt.Errorf("缺少回滚版本信息"))
 		return
 	}
-	if err := m.rollbackDocker(task, state.PreviousImage, state.PreviousVersion); err != nil {
+
+	if err := m.rollbackBinary(task, currentReleasePath, previousReleasePath); err != nil {
 		m.failTask(task, err)
 		return
 	}
-	m.completeTask(task, StatusRolledBack, 100, "已回滚到上一个稳定版本", true)
+
+	m.completeTask(task, StatusRolledBack, 100, "已回滚到上一个稳定版本", strings.TrimSpace(currentReleasePath) != "")
 	state.ActiveTaskID = ""
 	state.CurrentTask = task
-	state.CurrentVersion = state.PreviousVersion
+	state.CurrentVersion = previousVersion
 	state.PreviousVersion = currentVersion
-	state.CurrentImage, state.PreviousImage = state.PreviousImage, state.CurrentImage
+	state.CurrentReleasePath = previousReleasePath
+	state.PreviousReleasePath = currentReleasePath
+	state.RuntimeVersion = buildinfo.CleanRuntimeVersion()
 	_ = m.store.SaveState(state)
 }
 
-func (m *Manager) applyDocker(task *Task, manifest ServerManifest, previousImage string) error {
-	dockerImage := strings.TrimSpace(manifest.Docker.Image)
-	dockerTag := strings.TrimSpace(manifest.Docker.Tag)
-	if dockerImage == "" || dockerTag == "" {
-		return fmt.Errorf("更新清单缺少 docker 镜像信息")
+func (m *Manager) applyBinary(task *Task, manifest ServerManifest, previousReleasePath string) (applyBinaryResult, error) {
+	if m.controller == nil {
+		return applyBinaryResult{}, fmt.Errorf("launcher 进程控制器未初始化")
 	}
-	m.advanceTask(task, StatusDownloading, 20, "拉取 Docker 镜像")
-	targetImage := dockerImage + ":" + dockerTag
-	if err := writeComposeImage(targetImage); err != nil {
-		return err
+	if err := validateRuntimeCompatibility(manifest); err != nil {
+		return applyBinaryResult{}, err
 	}
-	if err := m.runComposeCommand("pull", DockerServiceName()); err != nil {
-		_ = writeComposeImage(previousImage)
-		return err
+
+	artifactKey, artifact, err := selectArtifact(manifest)
+	if err != nil {
+		return applyBinaryResult{}, err
 	}
-	m.advanceTask(task, StatusInstalling, 55, "重启 Docker 服务")
-	if err := m.runComposeCommand("up", "-d", DockerServiceName()); err != nil {
-		_ = writeComposeImage(previousImage)
-		return err
+
+	m.advanceTask(task, StatusDownloading, 20, "下载服务端二进制")
+	archivePath, err := downloadArtifact(m.store.TempDir(), task.ID, artifact.URL)
+	if err != nil {
+		return applyBinaryResult{}, err
 	}
+	defer os.Remove(archivePath)
+
+	if err := verifySHA256File(archivePath, artifact.SHA256); err != nil {
+		return applyBinaryResult{}, err
+	}
+
+	releasePath := filepath.Join(m.store.ReleasesDir(), task.TargetVersion)
+	if err := extractServerArchive(archivePath, releasePath); err != nil {
+		return applyBinaryResult{}, err
+	}
+
+	m.advanceTask(task, StatusInstalling, 55, "重启服务端进程")
+	if err := setCurrentReleaseLink(m.store.CurrentReleaseLink(), releasePath); err != nil {
+		return applyBinaryResult{}, err
+	}
+	if err := m.controller.RestartCurrentServer(restartTimeout); err != nil {
+		if strings.TrimSpace(previousReleasePath) != "" {
+			if rollbackErr := rollbackCurrentRelease(m.store.CurrentReleaseLink(), previousReleasePath); rollbackErr == nil {
+				_ = m.controller.RestartCurrentServer(restartTimeout)
+			}
+		}
+		return applyBinaryResult{}, err
+	}
+
 	m.advanceTask(task, StatusHealthCheck, 90, "等待服务恢复")
-	if err := waitForHealth(HealthURLForMode(DeployModeDocker), 60*time.Second); err != nil {
-		if strings.TrimSpace(previousImage) != "" {
-			_ = writeComposeImage(previousImage)
-			if rollbackErr := m.runComposeCommand("up", "-d", DockerServiceName()); rollbackErr == nil {
-				if waitErr := waitForHealth(HealthURLForMode(DeployModeDocker), 40*time.Second); waitErr == nil {
-					m.completeTask(task, StatusRolledBack, 100, "新镜像启动失败，已自动回滚", true)
-					state, _ := m.store.LoadState()
-					state.ActiveTaskID = ""
-					state.CurrentTask = task
-					_ = m.store.SaveState(state)
-					return nil
+	if err := waitForHealth(HealthURLForMode(DetectDeployMode()), 60*time.Second); err != nil {
+		if strings.TrimSpace(previousReleasePath) != "" {
+			if rollbackErr := rollbackCurrentRelease(m.store.CurrentReleaseLink(), previousReleasePath); rollbackErr == nil {
+				if restartErr := m.controller.RestartCurrentServer(restartTimeout); restartErr == nil {
+					if waitErr := waitForHealth(HealthURLForMode(DetectDeployMode()), 40*time.Second); waitErr == nil {
+						m.completeTask(task, StatusRolledBack, 100, "新版本启动失败，已自动回滚", true)
+						if global.Logger != nil {
+							global.Logger.Warnf("binary update auto rolled back artifact=%s version=%s", artifactKey, task.TargetVersion)
+						}
+						return applyBinaryResult{
+							targetVersion:  task.CurrentVersion,
+							releasePath:    previousReleasePath,
+							autoRolledBack: true,
+						}, nil
+					}
 				}
+			}
+		}
+		return applyBinaryResult{}, err
+	}
+
+	if global.Logger != nil {
+		global.Logger.Infof("updated runtime artifact=%s version=%s release=%s", artifactKey, task.TargetVersion, releasePath)
+	}
+	return applyBinaryResult{
+		targetVersion: task.TargetVersion,
+		releasePath:   releasePath,
+	}, nil
+}
+
+func (m *Manager) rollbackBinary(task *Task, currentReleasePath string, previousReleasePath string) error {
+	if m.controller == nil {
+		return fmt.Errorf("launcher 进程控制器未初始化")
+	}
+
+	m.advanceTask(task, StatusInstalling, 50, "切换回滚版本")
+	if err := setCurrentReleaseLink(m.store.CurrentReleaseLink(), previousReleasePath); err != nil {
+		return err
+	}
+	if err := m.controller.RestartCurrentServer(restartTimeout); err != nil {
+		if strings.TrimSpace(currentReleasePath) != "" {
+			if rollbackErr := rollbackCurrentRelease(m.store.CurrentReleaseLink(), currentReleasePath); rollbackErr == nil {
+				_ = m.controller.RestartCurrentServer(restartTimeout)
+			}
+		}
+		return err
+	}
+
+	m.advanceTask(task, StatusHealthCheck, 90, "等待服务恢复")
+	if err := waitForHealth(HealthURLForMode(DetectDeployMode()), 60*time.Second); err != nil {
+		if strings.TrimSpace(currentReleasePath) != "" {
+			if rollbackErr := rollbackCurrentRelease(m.store.CurrentReleaseLink(), currentReleasePath); rollbackErr == nil {
+				_ = m.controller.RestartCurrentServer(restartTimeout)
 			}
 		}
 		return err
 	}
 	return nil
-}
-
-func (m *Manager) rollbackDocker(task *Task, image string, version string) error {
-	m.advanceTask(task, StatusInstalling, 50, "切换回滚镜像")
-	if err := writeComposeImage(image); err != nil {
-		return err
-	}
-	if err := m.runComposeCommand("up", "-d", DockerServiceName()); err != nil {
-		return err
-	}
-	task.TargetVersion = version
-	m.advanceTask(task, StatusHealthCheck, 90, "等待服务恢复")
-	return waitForHealth(HealthURLForMode(DeployModeDocker), 60*time.Second)
-}
-
-func (m *Manager) runComposeCommand(args ...string) error {
-	fullArgs := []string{"compose", "-f", DockerComposeFile()}
-	fullArgs = append(fullArgs, args...)
-	cmd := exec.Command("docker", fullArgs...)
-	cmd.Dir = DockerComposeProjectDir()
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("docker %s 失败: %v\n%s", strings.Join(fullArgs, " "), err, string(output))
-	}
-	return nil
-}
-
-func writeComposeImage(image string) error {
-	if strings.TrimSpace(image) == "" {
-		return nil
-	}
-	path := DockerEnvFile()
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
-	}
-	var output bytes.Buffer
-	lines := []string{}
-	if payload, err := os.ReadFile(path); err == nil {
-		scanner := bufio.NewScanner(bytes.NewReader(payload))
-		for scanner.Scan() {
-			lines = append(lines, scanner.Text())
-		}
-		if err := scanner.Err(); err != nil {
-			return err
-		}
-	}
-	updated := false
-	for _, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, DockerImageEnvName()+"=") {
-			output.WriteString(DockerImageEnvName() + "=" + image + "\n")
-			updated = true
-			continue
-		}
-		output.WriteString(line + "\n")
-	}
-	if !updated {
-		output.WriteString(DockerImageEnvName() + "=" + image + "\n")
-	}
-	return os.WriteFile(path, output.Bytes(), 0o644)
 }
 
 func (m *Manager) detectCurrentVersion(mode DeployMode) string {
@@ -357,6 +390,8 @@ func (m *Manager) advanceTask(task *Task, status TaskStatus, progress int, step 
 	state.ActiveTaskID = task.ID
 	state.LastTaskID = task.ID
 	state.CurrentTask = task
+	state.RuntimeVersion = buildinfo.CleanRuntimeVersion()
+	state.DeployMode = DetectDeployMode()
 	_ = m.store.SaveState(state)
 }
 
@@ -386,6 +421,8 @@ func (m *Manager) failTask(task *Task, err error) {
 	state.ActiveTaskID = ""
 	state.LastTaskID = task.ID
 	state.CurrentTask = task
+	state.RuntimeVersion = buildinfo.CleanRuntimeVersion()
+	state.DeployMode = DetectDeployMode()
 	_ = m.store.SaveState(state)
 }
 
@@ -393,5 +430,34 @@ func (m *Manager) canRollback(task *Task, state *State) bool {
 	if task == nil || state == nil {
 		return false
 	}
-	return strings.TrimSpace(state.PreviousVersion) != "" && task.Terminal()
+	return strings.TrimSpace(state.PreviousVersion) != "" &&
+		strings.TrimSpace(state.PreviousReleasePath) != "" &&
+		task.Terminal()
+}
+
+func selectArtifact(manifest ServerManifest) (string, BinaryArtifact, error) {
+	if runtime.GOOS != "linux" {
+		return "", BinaryArtifact{}, fmt.Errorf("仅支持 Linux 容器内二进制更新")
+	}
+	artifactKey := "linux-" + runtime.GOARCH
+	artifact, ok := manifest.Artifacts[artifactKey]
+	if !ok {
+		return "", BinaryArtifact{}, fmt.Errorf("更新清单缺少 %s 对应的二进制产物", artifactKey)
+	}
+	if strings.TrimSpace(artifact.URL) == "" || strings.TrimSpace(artifact.SHA256) == "" {
+		return "", BinaryArtifact{}, fmt.Errorf("%s 对应的二进制产物信息不完整", artifactKey)
+	}
+	return artifactKey, artifact, nil
+}
+
+func validateRuntimeCompatibility(manifest ServerManifest) error {
+	minRuntimeVersion := strings.TrimSpace(manifest.MinRuntimeVersion)
+	if minRuntimeVersion == "" {
+		return nil
+	}
+	currentRuntimeVersion := buildinfo.CleanRuntimeVersion()
+	if CompareVersions(currentRuntimeVersion, minRuntimeVersion) < 0 {
+		return fmt.Errorf("当前 runtime 版本 %s 低于最低要求 %s，请先手动升级 Docker 镜像", currentRuntimeVersion, minRuntimeVersion)
+	}
+	return nil
 }
