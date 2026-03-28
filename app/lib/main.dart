@@ -5,6 +5,7 @@ import 'package:get/get.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:ohome/app/modules/home/controllers/home_controller.dart';
 import 'package:ohome/app/services/index_services.dart';
+import 'package:ohome/app/services/startup_recovery_service.dart';
 import 'package:ohome/app/utils/app_env.dart';
 
 import 'app/routes/app_pages.dart';
@@ -13,12 +14,13 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   MediaKit.ensureInitialized();
   await AppEnv.init();
+  final startupRecovery = await StartupRecoveryService().recover();
 
   await IndexServices.init();
-  runApp(_buildApp());
+  runApp(_buildApp(initialRoute: startupRecovery.shouldOpenLogin ? Routes.LOGIN : AppPages.INITIAL));
 }
 
-Widget _buildApp() {
+Widget _buildApp({required String initialRoute}) {
   return ScreenUtilInit(
     designSize: const Size(375, 876),
     minTextAdapt: true,
@@ -74,7 +76,7 @@ Widget _buildApp() {
         ),
         iconTheme: const IconThemeData(color: Colors.white70),
       ),
-      initialRoute: AppPages.INITIAL,
+      initialRoute: initialRoute,
       getPages: AppPages.routes,
       navigatorObservers: const <NavigatorObserver>[],
       routingCallback: (routing) {

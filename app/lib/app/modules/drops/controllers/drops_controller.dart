@@ -145,6 +145,8 @@ class DropsController extends GetxController {
     try {
       final result = await _dropsApi.getOverview();
       overview.value = result;
+    } catch (_) {
+      return;
     } finally {
       loading.value = false;
     }

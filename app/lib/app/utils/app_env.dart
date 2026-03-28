@@ -43,6 +43,8 @@ class AppEnv {
 
   String get apiBaseUrl => _apiBaseUrl;
 
+  bool get isUsingDefaultApiBaseUrl => _apiBaseUrl == _defaultApiBaseUrl;
+
   String get defaultApiBaseUrlInputValue =>
       _toApiBaseUrlInputValue(_defaultApiBaseUrl);
 
@@ -165,6 +167,11 @@ class AppEnv {
     final normalized = normalizeApiBaseUrlInput(value);
     _apiBaseUrl = normalized;
     await _storage.writeApiBaseUrlOverride(normalized);
+  }
+
+  Future<void> resetApiBaseUrlToDefault() async {
+    _apiBaseUrl = _defaultApiBaseUrl;
+    await _storage.clearApiBaseUrlOverride();
   }
 
   static String normalizeApiBaseUrlInput(String value) {

@@ -152,6 +152,8 @@ class MessagesController extends GetxController {
         _pages[index] += 1;
       }
       _hasLoaded[index] = true;
+    } catch (_) {
+      return;
     } finally {
       if (token == _tokens[index]) {
         if (refresh) {

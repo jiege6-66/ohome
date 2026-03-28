@@ -95,6 +95,10 @@ class DiscoveryService {
     );
   }
 
+  Future<DiscoveredServer?> probeApiBaseUrlInput(String rawInput) {
+    return _probeInput(rawInput);
+  }
+
   Future<DiscoveredServer?> _probeInput(String rawInput) async {
     final normalized = AppEnv.normalizeApiBaseUrlInput(rawInput);
     final origin = _originFromApiBaseUrl(normalized);
