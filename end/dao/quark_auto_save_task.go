@@ -17,20 +17,6 @@ func (d *QuarkAutoSaveTaskDao) GetByID(id uint, ownerUserID uint) (model.QuarkAu
 	return task, err
 }
 
-func (d *QuarkAutoSaveTaskDao) GetOwnerUserIDByID(id uint) (uint, error) {
-	type row struct {
-		OwnerUserID uint `gorm:"column:owner_user_id"`
-	}
-
-	var record row
-	if err := global.DB.Model(&model.QuarkAutoSaveTask{}).
-		Select("owner_user_id").
-		First(&record, id).Error; err != nil {
-		return 0, err
-	}
-	return record.OwnerUserID, nil
-}
-
 func (d *QuarkAutoSaveTaskDao) GetList(listDTO *dto.QuarkAutoSaveTaskListDTO, ownerUserID uint) ([]model.QuarkAutoSaveTask, int64, error) {
 	var tasks []model.QuarkAutoSaveTask
 	var total int64
@@ -89,14 +75,4 @@ func (d *QuarkAutoSaveTaskDao) UpdateLastRunAt(id uint, at time.Time) error {
 
 func (d *QuarkAutoSaveTaskDao) Delete(id uint, ownerUserID uint) error {
 	return global.DB.Where("owner_user_id = ?", ownerUserID).Delete(&model.QuarkAutoSaveTask{}, id).Error
-}
-
-func (d *QuarkAutoSaveTaskDao) AssignMissingOwners(ownerUserID uint) error {
-	if ownerUserID == 0 {
-		return nil
-	}
-
-	return global.DB.Model(&model.QuarkAutoSaveTask{}).
-		Where("owner_user_id = ?", 0).
-		Update("owner_user_id", ownerUserID).Error
 }

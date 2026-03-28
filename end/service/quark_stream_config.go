@@ -145,27 +145,3 @@ func quarkStreamConfigKeys() []string {
 		quarkStreamWebProxyModeKey,
 	}
 }
-
-func EnsureDefaultQuarkStreamConfigs() error {
-	defaults := []struct {
-		key    string
-		name   string
-		value  string
-		remark string
-	}{
-		{
-			key:    quarkStreamWebProxyModeKey,
-			name:   "夸克播放代理模式",
-			value:  defaultQuarkStreamWebProxyMode,
-			remark: "夸克在线播放代理模式：native_proxy=本地代理，302_redirect=302直连",
-		},
-	}
-
-	for _, item := range defaults {
-		if err := ensureConfigDefault(item.key, item.name, item.value, item.remark, ""); err != nil {
-			return err
-		}
-	}
-	invalidateQuarkStreamConfigCache()
-	return nil
-}

@@ -13,7 +13,7 @@ import (
 	"ohome/service/dto"
 )
 
-func TestEnsureTaskOwnershipAndTaskIsolation(t *testing.T) {
+func TestTaskIsolation(t *testing.T) {
 	restore := setupPhase2TestDB(t)
 	defer restore()
 
@@ -23,7 +23,8 @@ func TestEnsureTaskOwnershipAndTaskIsolation(t *testing.T) {
 	superAdmin := seedUser(t, "admin", superRole.ID)
 	member := seedUser(t, "member", userRole.ID)
 
-	legacyTask := model.QuarkAutoSaveTask{
+	adminTask := model.QuarkAutoSaveTask{
+		OwnerUserID:  superAdmin.ID,
 		TaskName:     "legacy",
 		ShareURL:     "https://example.com/legacy",
 		SavePath:     "/legacy",
@@ -31,8 +32,8 @@ func TestEnsureTaskOwnershipAndTaskIsolation(t *testing.T) {
 		RunTime:      "08:00",
 		Enabled:      true,
 	}
-	if err := global.DB.Create(&legacyTask).Error; err != nil {
-		t.Fatalf("Create(legacyTask) error = %v", err)
+	if err := global.DB.Create(&adminTask).Error; err != nil {
+		t.Fatalf("Create(adminTask) error = %v", err)
 	}
 
 	memberTask := model.QuarkAutoSaveTask{
@@ -48,17 +49,18 @@ func TestEnsureTaskOwnershipAndTaskIsolation(t *testing.T) {
 		t.Fatalf("Create(memberTask) error = %v", err)
 	}
 
-	legacySourceTaskID := legacyTask.ID
-	legacyTransfer := model.QuarkTransferTask{
+	adminSourceTaskID := adminTask.ID
+	adminTransfer := model.QuarkTransferTask{
+		OwnerUserID:  superAdmin.ID,
 		DisplayName:  "legacy-transfer",
 		ShareURL:     "https://example.com/legacy-transfer",
 		SavePath:     "/legacy",
 		SourceType:   model.QuarkTransferTaskSourceSyncSchedule,
-		SourceTaskID: &legacySourceTaskID,
+		SourceTaskID: &adminSourceTaskID,
 		Status:       model.QuarkTransferTaskStatusSuccess,
 	}
-	if err := global.DB.Create(&legacyTransfer).Error; err != nil {
-		t.Fatalf("Create(legacyTransfer) error = %v", err)
+	if err := global.DB.Create(&adminTransfer).Error; err != nil {
+		t.Fatalf("Create(adminTransfer) error = %v", err)
 	}
 
 	memberTransfer := model.QuarkTransferTask{
@@ -73,26 +75,6 @@ func TestEnsureTaskOwnershipAndTaskIsolation(t *testing.T) {
 		t.Fatalf("Create(memberTransfer) error = %v", err)
 	}
 
-	if err := EnsureTaskOwnership(); err != nil {
-		t.Fatalf("EnsureTaskOwnership() error = %v", err)
-	}
-
-	var reloadedLegacyTask model.QuarkAutoSaveTask
-	if err := global.DB.First(&reloadedLegacyTask, legacyTask.ID).Error; err != nil {
-		t.Fatalf("First(legacyTask) error = %v", err)
-	}
-	if reloadedLegacyTask.OwnerUserID != superAdmin.ID {
-		t.Fatalf("legacy task owner = %d, want %d", reloadedLegacyTask.OwnerUserID, superAdmin.ID)
-	}
-
-	var reloadedLegacyTransfer model.QuarkTransferTask
-	if err := global.DB.First(&reloadedLegacyTransfer, legacyTransfer.ID).Error; err != nil {
-		t.Fatalf("First(legacyTransfer) error = %v", err)
-	}
-	if reloadedLegacyTransfer.OwnerUserID != superAdmin.ID {
-		t.Fatalf("legacy transfer owner = %d, want %d", reloadedLegacyTransfer.OwnerUserID, superAdmin.ID)
-	}
-
 	autoService := &QuarkAutoSaveTaskService{}
 	autoList, autoTotal, err := autoService.GetList(&dto.QuarkAutoSaveTaskListDTO{
 		Paginate: dto.Paginate{Page: 1, Limit: 20},
@@ -103,7 +85,7 @@ func TestEnsureTaskOwnershipAndTaskIsolation(t *testing.T) {
 	if autoTotal != 1 || len(autoList) != 1 || autoList[0].ID != memberTask.ID {
 		t.Fatalf("member auto task list mismatch: total=%d len=%d first=%d", autoTotal, len(autoList), firstAutoTaskID(autoList))
 	}
-	if _, err := autoService.GetByID(&dto.CommonIDDTO{ID: legacyTask.ID}, member.ID); err == nil {
+	if _, err := autoService.GetByID(&dto.CommonIDDTO{ID: adminTask.ID}, member.ID); err == nil {
 		t.Fatal("GetByID() should reject cross-owner auto task access")
 	}
 
@@ -117,7 +99,7 @@ func TestEnsureTaskOwnershipAndTaskIsolation(t *testing.T) {
 	if transferTotal != 1 || len(transferList) != 1 || transferList[0].ID != memberTransfer.ID {
 		t.Fatalf("member transfer task list mismatch: total=%d len=%d first=%d", transferTotal, len(transferList), firstTransferTaskID(transferList))
 	}
-	if err := transferService.DeleteByID(&dto.CommonIDDTO{ID: legacyTransfer.ID}, member.ID); err == nil {
+	if err := transferService.DeleteByID(&dto.CommonIDDTO{ID: adminTransfer.ID}, member.ID); err == nil {
 		t.Fatal("DeleteByID() should reject cross-owner transfer task access")
 	}
 }

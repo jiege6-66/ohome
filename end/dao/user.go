@@ -140,39 +140,6 @@ func (m *UserDao) CountByRoleCodeForUpdate(db *gorm.DB, roleCode string, exclude
 	return m.countByRoleCode(db, roleCode, excludeUserID, true)
 }
 
-func (m *UserDao) GetPreferredTaskOwnerID() (uint, error) {
-	type row struct {
-		ID uint `gorm:"column:id"`
-	}
-
-	var preferred row
-	err := global.DB.Model(&model.User{}).
-		Select("sys_user.id").
-		Joins("JOIN sys_role ON sys_role.id = sys_user.role_id").
-		Where("sys_role.code = ?", model.RoleCodeSuperAdmin).
-		Order("sys_user.id asc").
-		Take(&preferred).Error
-	switch {
-	case err == nil && preferred.ID != 0:
-		return preferred.ID, nil
-	case err != nil && !errors.Is(err, gorm.ErrRecordNotFound):
-		return 0, err
-	}
-
-	preferred = row{}
-	err = global.DB.Model(&model.User{}).
-		Select("id").
-		Order("id asc").
-		Take(&preferred).Error
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return 0, nil
-	}
-	if err != nil {
-		return 0, err
-	}
-	return preferred.ID, nil
-}
-
 func (m *UserDao) countByRoleCode(db *gorm.DB, roleCode string, excludeUserID uint, lock bool) (int64, error) {
 	var total int64
 	query := db.Model(&model.User{}).

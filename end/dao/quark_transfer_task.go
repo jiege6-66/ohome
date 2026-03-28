@@ -97,29 +97,3 @@ func (d *QuarkTransferTaskDao) RecoverInterruptedTasks(now time.Time) (int64, er
 		})
 	return result.RowsAffected, result.Error
 }
-
-func (d *QuarkTransferTaskDao) GetUnownedBySourceTask() ([]model.QuarkTransferTask, error) {
-	records := make([]model.QuarkTransferTask, 0)
-	err := global.DB.
-		Where("owner_user_id = ? AND source_task_id IS NOT NULL", 0).
-		Find(&records).Error
-	return records, err
-}
-
-func (d *QuarkTransferTaskDao) UpdateOwnerByID(id uint, ownerUserID uint) error {
-	if ownerUserID == 0 {
-		return nil
-	}
-	return global.DB.Model(&model.QuarkTransferTask{}).
-		Where("id = ?", id).
-		Update("owner_user_id", ownerUserID).Error
-}
-
-func (d *QuarkTransferTaskDao) AssignMissingOwners(ownerUserID uint) error {
-	if ownerUserID == 0 {
-		return nil
-	}
-	return global.DB.Model(&model.QuarkTransferTask{}).
-		Where("owner_user_id = ?", 0).
-		Update("owner_user_id", ownerUserID).Error
-}
