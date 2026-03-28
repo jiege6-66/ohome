@@ -455,12 +455,8 @@ class _ResourceCardPageState extends State<ResourceCardPage> {
     final iconColor = disabled ? Colors.white30 : Colors.white54;
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: const Color(0xFF101113),
-          borderRadius: BorderRadius.circular(18),
-        ),
+      padding: const EdgeInsets.fromLTRB(12, 0, 12, 0),
+      child: Container(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           child: Align(
