@@ -17,19 +17,19 @@ type QuarkAutoSaveTaskService struct {
 
 const quarkTransferPrecheckTimeout = 30 * time.Second
 
-func (s *QuarkAutoSaveTaskService) GetByID(iCommonIDDTO *dto.CommonIDDTO) (model.QuarkAutoSaveTask, error) {
-	return quarkAutoSaveTaskDao.GetByID(iCommonIDDTO.ID)
+func (s *QuarkAutoSaveTaskService) GetByID(iCommonIDDTO *dto.CommonIDDTO, ownerUserID uint) (model.QuarkAutoSaveTask, error) {
+	return quarkAutoSaveTaskDao.GetByID(iCommonIDDTO.ID, ownerUserID)
 }
 
-func (s *QuarkAutoSaveTaskService) GetList(listDTO *dto.QuarkAutoSaveTaskListDTO) ([]model.QuarkAutoSaveTask, int64, error) {
-	return quarkAutoSaveTaskDao.GetList(listDTO)
+func (s *QuarkAutoSaveTaskService) GetList(listDTO *dto.QuarkAutoSaveTaskListDTO, ownerUserID uint) ([]model.QuarkAutoSaveTask, int64, error) {
+	return quarkAutoSaveTaskDao.GetList(listDTO, ownerUserID)
 }
 
 func (s *QuarkAutoSaveTaskService) GetEnabledTasks() ([]model.QuarkAutoSaveTask, error) {
 	return quarkAutoSaveTaskDao.GetEnabledTasks()
 }
 
-func (s *QuarkAutoSaveTaskService) AddOrUpdate(updateDTO *dto.QuarkAutoSaveTaskUpdateDTO) error {
+func (s *QuarkAutoSaveTaskService) AddOrUpdate(updateDTO *dto.QuarkAutoSaveTaskUpdateDTO, ownerUserID uint) error {
 	updateDTO.TaskName = strings.TrimSpace(updateDTO.TaskName)
 	updateDTO.ShareURL = strings.TrimSpace(updateDTO.ShareURL)
 	updateDTO.SavePath = stripQuarkPrefixForStore(updateDTO.SavePath)
@@ -58,11 +58,14 @@ func (s *QuarkAutoSaveTaskService) AddOrUpdate(updateDTO *dto.QuarkAutoSaveTaskU
 		}
 	}
 
-	return quarkAutoSaveTaskDao.AddOrUpdate(updateDTO)
+	return quarkAutoSaveTaskDao.AddOrUpdate(updateDTO, ownerUserID)
 }
 
-func (s *QuarkAutoSaveTaskService) DeleteByID(iCommonIDDTO *dto.CommonIDDTO) error {
-	return quarkAutoSaveTaskDao.Delete(iCommonIDDTO.ID)
+func (s *QuarkAutoSaveTaskService) DeleteByID(iCommonIDDTO *dto.CommonIDDTO, ownerUserID uint) error {
+	if _, err := quarkAutoSaveTaskDao.GetByID(iCommonIDDTO.ID, ownerUserID); err != nil {
+		return err
+	}
+	return quarkAutoSaveTaskDao.Delete(iCommonIDDTO.ID, ownerUserID)
 }
 
 func (s *QuarkAutoSaveTaskService) RunOnce(task model.QuarkAutoSaveTask, ownerUserID uint) (model.QuarkTransferTask, error) {

@@ -8,7 +8,7 @@ import (
 
 type User struct {
 	CommonModel
-	Name     string `json:"name" gorm:"size:64;not null"`
+	Name     string `json:"name" gorm:"size:64;not null;uniqueIndex:uk_sys_user_name"`
 	RealName string `json:"realName" gorm:"size:128;"`
 	Avatar   string `json:"avatar" gorm:"size:256"`
 	Password string `json:"password" gorm:"size:128;not null;"`

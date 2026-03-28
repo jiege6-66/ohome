@@ -27,17 +27,17 @@ type quarkTransferTaskSubmission struct {
 	ownerUserID  uint
 }
 
-func (s *QuarkTransferTaskService) GetList(listDTO *dto.QuarkTransferTaskListDTO) ([]model.QuarkTransferTask, int64, error) {
+func (s *QuarkTransferTaskService) GetList(listDTO *dto.QuarkTransferTaskListDTO, ownerUserID uint) ([]model.QuarkTransferTask, int64, error) {
 	listDTO.Status = strings.TrimSpace(listDTO.Status)
 	listDTO.SourceType = strings.TrimSpace(listDTO.SourceType)
-	return quarkTransferTaskDao.GetList(listDTO)
+	return quarkTransferTaskDao.GetList(listDTO, ownerUserID)
 }
 
-func (s *QuarkTransferTaskService) DeleteByID(iCommonIDDTO *dto.CommonIDDTO) error {
-	if _, err := quarkTransferTaskDao.GetByID(iCommonIDDTO.ID); err != nil {
+func (s *QuarkTransferTaskService) DeleteByID(iCommonIDDTO *dto.CommonIDDTO, ownerUserID uint) error {
+	if _, err := quarkTransferTaskDao.GetByID(iCommonIDDTO.ID, ownerUserID); err != nil {
 		return err
 	}
-	if err := quarkTransferTaskDao.Delete(iCommonIDDTO.ID); err != nil {
+	if err := quarkTransferTaskDao.Delete(iCommonIDDTO.ID, ownerUserID); err != nil {
 		return err
 	}
 	return nil
@@ -90,7 +90,7 @@ func (s *QuarkTransferTaskService) SubmitSyncManualTask(task model.QuarkAutoSave
 }
 
 func (s *QuarkTransferTaskService) SubmitSyncScheduleTask(task model.QuarkAutoSaveTask) (model.QuarkTransferTask, error) {
-	return s.submitSyncTask(task, model.QuarkTransferTaskSourceSyncSchedule, 0)
+	return s.submitSyncTask(task, model.QuarkTransferTaskSourceSyncSchedule, task.OwnerUserID)
 }
 
 func (s *QuarkTransferTaskService) submitSyncTask(task model.QuarkAutoSaveTask, sourceType string, ownerUserID uint) (model.QuarkTransferTask, error) {
@@ -117,7 +117,7 @@ func (s *QuarkTransferTaskService) submitSyncTask(task model.QuarkAutoSaveTask, 
 }
 
 func (s *QuarkTransferTaskService) submit(submission quarkTransferTaskSubmission) (model.QuarkTransferTask, error) {
-	startedAt := time.Now()
+	submittedAt := time.Now()
 	transferTask := model.QuarkTransferTask{
 		OwnerUserID:  submission.ownerUserID,
 		DisplayName:  submission.displayName,
@@ -126,26 +126,89 @@ func (s *QuarkTransferTaskService) submit(submission quarkTransferTaskSubmission
 		Application:  submission.application,
 		SourceType:   submission.sourceType,
 		SourceTaskID: submission.sourceTaskID,
-		Status:       model.QuarkTransferTaskStatusProcessing,
-		StartedAt:    &startedAt,
+		Status:       model.QuarkTransferTaskStatusQueued,
 	}
 
-	if err := quarkTransferTaskDao.Create(&transferTask, submission.sourceTaskID, startedAt); err != nil {
+	if err := quarkTransferTaskDao.Create(&transferTask, submission.sourceTaskID, submittedAt); err != nil {
 		return model.QuarkTransferTask{}, err
 	}
 
-	go s.runTransferTask(transferTask, quarkSaveTask{
-		ID:               transferTask.ID,
-		TaskName:         transferTask.DisplayName,
-		ShareURL:         transferTask.ShareURL,
-		SavePath:         transferTask.SavePath,
-		RenameTopLevelTo: submission.renameTo,
-	})
+	if err := getOrCreateQuarkTransferTaskExecutor().enqueue(quarkTransferTaskExecution{
+		task: transferTask,
+		saveTask: quarkSaveTask{
+			ID:               transferTask.ID,
+			TaskName:         transferTask.DisplayName,
+			ShareURL:         transferTask.ShareURL,
+			SavePath:         transferTask.SavePath,
+			RenameTopLevelTo: submission.renameTo,
+		},
+	}); err != nil {
+		s.markTaskSubmitFailed(transferTask, err)
+		return model.QuarkTransferTask{}, err
+	}
 
 	return transferTask, nil
 }
 
-func (s *QuarkTransferTaskService) runTransferTask(task model.QuarkTransferTask, saveTask quarkSaveTask) {
+func (s *QuarkTransferTaskService) markTaskSubmitFailed(task model.QuarkTransferTask, err error) {
+	finishedAt := time.Now()
+	task.Status = model.QuarkTransferTaskStatusFailed
+	task.ResultMessage = strings.TrimSpace(err.Error())
+	task.SavedCount = 0
+	task.FinishedAt = &finishedAt
+	if task.ResultMessage == "" {
+		task.ResultMessage = quarkTransferTaskQueueFullMessage
+	}
+
+	if updateErr := quarkTransferTaskDao.UpdateTaskResult(task.ID, map[string]any{
+		"status":         model.QuarkTransferTaskStatusFailed,
+		"result_message": task.ResultMessage,
+		"saved_count":    0,
+		"finished_at":    finishedAt,
+	}); updateErr != nil {
+		if global.Logger != nil {
+			global.Logger.Errorf("Quark Transfer Task Queue Reject Update Error: #%d %s", task.ID, updateErr.Error())
+		}
+		return
+	}
+
+	if notifyErr := (&AppMessageService{}).SaveQuarkTransferResult(task); notifyErr != nil && global.Logger != nil {
+		global.Logger.Errorf("Quark Transfer Task Queue Reject Message Error: #%d %s", task.ID, notifyErr.Error())
+	}
+	if global.Logger != nil {
+		global.Logger.Warnf("Quark Transfer Task Queue Reject: #%d %s", task.ID, task.ResultMessage)
+	}
+}
+
+func (s *QuarkTransferTaskService) runTransferTask(
+	task model.QuarkTransferTask,
+	saveTask quarkSaveTask,
+	execute quarkTransferExecuteFunc,
+) {
+	startedAt := time.Now()
+	started, err := quarkTransferTaskDao.MarkProcessing(task.ID, startedAt)
+	if err != nil {
+		if global.Logger != nil {
+			global.Logger.Errorf("Quark Transfer Task Start Update Error: #%d %s", task.ID, err.Error())
+		}
+		return
+	}
+	if !started {
+		if global.Logger != nil {
+			global.Logger.Warnf("Quark Transfer Task Skipped: #%d status is no longer queued", task.ID)
+		}
+		return
+	}
+
+	task.Status = model.QuarkTransferTaskStatusProcessing
+	task.StartedAt = &startedAt
+	task.FinishedAt = nil
+	task.ResultMessage = ""
+	task.SavedCount = 0
+
+	if execute == nil {
+		execute = executeQuarkTransfer
+	}
 	if global.Logger != nil {
 		global.Logger.Infof("Quark Transfer Task Start: #%d %s", task.ID, saveTask.TaskName)
 	}
@@ -153,7 +216,7 @@ func (s *QuarkTransferTaskService) runTransferTask(task model.QuarkTransferTask,
 	ctx, cancel := context.WithTimeout(context.Background(), quarkTransferTaskTimeout)
 	defer cancel()
 
-	result, err := executeQuarkTransfer(ctx, saveTask)
+	result, err := execute(ctx, saveTask)
 	finishedAt := time.Now()
 	updates := map[string]any{
 		"finished_at": finishedAt,

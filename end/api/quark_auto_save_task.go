@@ -17,11 +17,16 @@ func NewQuarkAutoSaveTaskApi() QuarkAutoSaveTask {
 
 // GetList 获取任务列表（分页）
 func (a *QuarkAutoSaveTask) GetList(c *gin.Context) {
+	loginUser, err := getLoginUser(c)
+	if err != nil {
+		utils.FailWithMessage(err.Error(), c)
+		return
+	}
 	var listDTO dto.QuarkAutoSaveTaskListDTO
 	if err := a.Request(RequestOptions{Ctx: c, DTO: &listDTO}).GetErrors(); err != nil {
 		return
 	}
-	tasks, total, err := quarkAutoSaveTaskService.GetList(&listDTO)
+	tasks, total, err := quarkAutoSaveTaskService.GetList(&listDTO, loginUser.ID)
 	if err != nil {
 		utils.FailWithMessage(err.Error(), c)
 		return
@@ -30,11 +35,16 @@ func (a *QuarkAutoSaveTask) GetList(c *gin.Context) {
 }
 
 func (a *QuarkAutoSaveTask) GetByID(c *gin.Context) {
+	loginUser, err := getLoginUser(c)
+	if err != nil {
+		utils.FailWithMessage(err.Error(), c)
+		return
+	}
 	var idDTO dto.CommonIDDTO
 	if err := a.Request(RequestOptions{Ctx: c, DTO: &idDTO}).GetErrors(); err != nil {
 		return
 	}
-	task, err := quarkAutoSaveTaskService.GetByID(&idDTO)
+	task, err := quarkAutoSaveTaskService.GetByID(&idDTO, loginUser.ID)
 	if err != nil {
 		utils.FailWithMessage(err.Error(), c)
 		return
@@ -43,11 +53,16 @@ func (a *QuarkAutoSaveTask) GetByID(c *gin.Context) {
 }
 
 func (a *QuarkAutoSaveTask) AddOrUpdate(c *gin.Context) {
+	loginUser, err := getLoginUser(c)
+	if err != nil {
+		utils.FailWithMessage(err.Error(), c)
+		return
+	}
 	var updateDTO dto.QuarkAutoSaveTaskUpdateDTO
 	if err := a.Request(RequestOptions{Ctx: c, DTO: &updateDTO}).GetErrors(); err != nil {
 		return
 	}
-	if err := quarkAutoSaveTaskService.AddOrUpdate(&updateDTO); err != nil {
+	if err := quarkAutoSaveTaskService.AddOrUpdate(&updateDTO, loginUser.ID); err != nil {
 		utils.FailWithMessage(err.Error(), c)
 		return
 	}
@@ -55,11 +70,16 @@ func (a *QuarkAutoSaveTask) AddOrUpdate(c *gin.Context) {
 }
 
 func (a *QuarkAutoSaveTask) Delete(c *gin.Context) {
+	loginUser, err := getLoginUser(c)
+	if err != nil {
+		utils.FailWithMessage(err.Error(), c)
+		return
+	}
 	var idDTO dto.CommonIDDTO
 	if err := a.Request(RequestOptions{Ctx: c, DTO: &idDTO}).GetErrors(); err != nil {
 		return
 	}
-	if err := quarkAutoSaveTaskService.DeleteByID(&idDTO); err != nil {
+	if err := quarkAutoSaveTaskService.DeleteByID(&idDTO, loginUser.ID); err != nil {
 		utils.FailWithMessage(err.Error(), c)
 		return
 	}
@@ -76,7 +96,7 @@ func (a *QuarkAutoSaveTask) RunOnce(c *gin.Context) {
 	if err := a.Request(RequestOptions{Ctx: c, DTO: &idDTO}).GetErrors(); err != nil {
 		return
 	}
-	task, err := quarkAutoSaveTaskService.GetByID(&idDTO)
+	task, err := quarkAutoSaveTaskService.GetByID(&idDTO, loginUser.ID)
 	if err != nil {
 		utils.FailWithMessage(err.Error(), c)
 		return

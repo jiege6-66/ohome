@@ -13,14 +13,14 @@ type QuarkTransferTaskDao struct {
 	BaseDao
 }
 
-func (d *QuarkTransferTaskDao) GetByID(id uint) (model.QuarkTransferTask, error) {
+func (d *QuarkTransferTaskDao) GetByID(id uint, ownerUserID uint) (model.QuarkTransferTask, error) {
 	var task model.QuarkTransferTask
-	err := global.DB.First(&task, id).Error
+	err := global.DB.Where("owner_user_id = ?", ownerUserID).First(&task, id).Error
 	return task, err
 }
 
-func (d *QuarkTransferTaskDao) Delete(id uint) error {
-	return global.DB.Delete(&model.QuarkTransferTask{}, id).Error
+func (d *QuarkTransferTaskDao) Delete(id uint, ownerUserID uint) error {
+	return global.DB.Where("owner_user_id = ?", ownerUserID).Delete(&model.QuarkTransferTask{}, id).Error
 }
 
 func (d *QuarkTransferTaskDao) Create(task *model.QuarkTransferTask, sourceTaskID *uint, startedAt time.Time) error {
@@ -39,17 +39,30 @@ func (d *QuarkTransferTaskDao) Create(task *model.QuarkTransferTask, sourceTaskI
 	})
 }
 
+func (d *QuarkTransferTaskDao) MarkProcessing(id uint, startedAt time.Time) (bool, error) {
+	tx := global.DB.Model(&model.QuarkTransferTask{}).
+		Where("id = ? AND status = ?", id, model.QuarkTransferTaskStatusQueued).
+		Updates(map[string]any{
+			"status":         model.QuarkTransferTaskStatusProcessing,
+			"started_at":     startedAt,
+			"finished_at":    nil,
+			"result_message": "",
+			"saved_count":    0,
+		})
+	return tx.RowsAffected > 0, tx.Error
+}
+
 func (d *QuarkTransferTaskDao) UpdateTaskResult(id uint, updates map[string]any) error {
 	return global.DB.Model(&model.QuarkTransferTask{}).
 		Where("id = ?", id).
 		Updates(updates).Error
 }
 
-func (d *QuarkTransferTaskDao) GetList(listDTO *dto.QuarkTransferTaskListDTO) ([]model.QuarkTransferTask, int64, error) {
+func (d *QuarkTransferTaskDao) GetList(listDTO *dto.QuarkTransferTaskListDTO, ownerUserID uint) ([]model.QuarkTransferTask, int64, error) {
 	records := make([]model.QuarkTransferTask, 0)
 	var total int64
 
-	filtered := global.DB.Model(&model.QuarkTransferTask{})
+	filtered := global.DB.Model(&model.QuarkTransferTask{}).Where("owner_user_id = ?", ownerUserID)
 	if listDTO.Status != "" {
 		filtered = filtered.Where("status = ?", listDTO.Status)
 	}
@@ -72,7 +85,10 @@ func (d *QuarkTransferTaskDao) GetList(listDTO *dto.QuarkTransferTaskListDTO) ([
 
 func (d *QuarkTransferTaskDao) RecoverInterruptedTasks(now time.Time) (int64, error) {
 	result := global.DB.Model(&model.QuarkTransferTask{}).
-		Where("status = ?", model.QuarkTransferTaskStatusProcessing).
+		Where("status IN ?", []string{
+			model.QuarkTransferTaskStatusQueued,
+			model.QuarkTransferTaskStatusProcessing,
+		}).
 		Updates(map[string]any{
 			"status":         model.QuarkTransferTaskStatusFailed,
 			"result_message": "服务重启导致任务中断",
@@ -80,4 +96,30 @@ func (d *QuarkTransferTaskDao) RecoverInterruptedTasks(now time.Time) (int64, er
 			"finished_at":    now,
 		})
 	return result.RowsAffected, result.Error
+}
+
+func (d *QuarkTransferTaskDao) GetUnownedBySourceTask() ([]model.QuarkTransferTask, error) {
+	records := make([]model.QuarkTransferTask, 0)
+	err := global.DB.
+		Where("owner_user_id = ? AND source_task_id IS NOT NULL", 0).
+		Find(&records).Error
+	return records, err
+}
+
+func (d *QuarkTransferTaskDao) UpdateOwnerByID(id uint, ownerUserID uint) error {
+	if ownerUserID == 0 {
+		return nil
+	}
+	return global.DB.Model(&model.QuarkTransferTask{}).
+		Where("id = ?", id).
+		Update("owner_user_id", ownerUserID).Error
+}
+
+func (d *QuarkTransferTaskDao) AssignMissingOwners(ownerUserID uint) error {
+	if ownerUserID == 0 {
+		return nil
+	}
+	return global.DB.Model(&model.QuarkTransferTask{}).
+		Where("owner_user_id = ?", 0).
+		Update("owner_user_id", ownerUserID).Error
 }

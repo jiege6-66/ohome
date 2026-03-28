@@ -11,6 +11,7 @@ class QuarkTransferTasksView extends GetView<QuarkTransferTasksController> {
 
   static const List<_StatusFilterOption> _filters = <_StatusFilterOption>[
     _StatusFilterOption(label: '全部', value: ''),
+    _StatusFilterOption(label: '排队中', value: 'queued'),
     _StatusFilterOption(label: '转存中', value: 'processing'),
     _StatusFilterOption(label: '转存成功', value: 'success'),
     _StatusFilterOption(label: '转存失败', value: 'failed'),
@@ -245,6 +246,9 @@ class _TaskCard extends StatelessWidget {
   }
 
   String _buildResultText() {
+    if (task.isQueued) {
+      return '任务排队中，等待空闲 worker';
+    }
     if (task.isProcessing) {
       return '任务进行中';
     }
@@ -291,6 +295,8 @@ class _TaskCard extends StatelessWidget {
 
   static Color _statusColor(String status) {
     switch (status) {
+      case 'queued':
+        return const Color(0xFF64B5F6);
       case 'processing':
         return const Color(0xFFFFB74D);
       case 'success':
