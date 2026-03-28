@@ -36,17 +36,6 @@ func Start() {
 	}
 	global.DB = db
 
-	if err := service.EnsureTaskOwnership(); err != nil && global.Logger != nil {
-		global.Logger.Errorf("Ensure Task Ownership Error: %s", err.Error())
-	}
-
-	if err := service.EnsureDefaultQuarkSearchConfigs(); err != nil && global.Logger != nil {
-		global.Logger.Errorf("Ensure Quark Search Config Error: %s", err.Error())
-	}
-	if err := service.EnsureDefaultQuarkStreamConfigs(); err != nil && global.Logger != nil {
-		global.Logger.Errorf("Ensure Quark Stream Config Error: %s", err.Error())
-	}
-
 	var quarkTransferTaskService service.QuarkTransferTaskService
 	if err := quarkTransferTaskService.RecoverInterruptedTasks(); err != nil && global.Logger != nil {
 		global.Logger.Errorf("Recover Quark Transfer Task Error: %s", err.Error())

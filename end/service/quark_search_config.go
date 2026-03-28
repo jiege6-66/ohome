@@ -3,10 +3,7 @@ package service
 import (
 	"ohome/model"
 	"ohome/quarksearch"
-	"ohome/service/dto"
 	"strings"
-
-	"gorm.io/gorm"
 )
 
 const (
@@ -78,80 +75,4 @@ func splitConfigList(raw string) []string {
 		result = append(result, value)
 	}
 	return result
-}
-
-func EnsureDefaultQuarkSearchConfigs() error {
-	defaults := []struct {
-		key         string
-		name        string
-		value       string
-		remark      string
-		legacyValue string
-	}{
-		{
-			key:         quarkSearchHTTPProxyKey,
-			name:        "夸克搜索 HTTP 代理",
-			value:       "",
-			remark:      "HTTP 请求代理地址，留空则直连",
-			legacyValue: "",
-		},
-		{
-			key:         quarkSearchHTTPSProxyKey,
-			name:        "夸克搜索 HTTPS 代理",
-			value:       "",
-			remark:      "HTTPS 请求代理地址，留空则直连",
-			legacyValue: "",
-		},
-		{
-			key:         quarkSearchChannelsKey,
-			name:        "夸克搜索 TG 频道",
-			value:       quarkSearchDefaultChannels,
-			remark:      "默认搜索 TG 频道，多个频道用逗号分隔",
-			legacyValue: "tgsearchers3",
-		},
-		{
-			key:         quarkSearchEnabledPluginsKey,
-			name:        "夸克搜索 启用插件",
-			value:       quarkSearchDefaultPlugins,
-			remark:      "指定启用插件，多个插件用逗号分隔",
-			legacyValue: "",
-		},
-	}
-
-	for _, item := range defaults {
-		if err := ensureConfigDefault(item.key, item.name, item.value, item.remark, item.legacyValue); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func ensureConfigDefault(key, name, value, remark, legacyValue string) error {
-	config, err := configDao.GetByKey(key)
-	if err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return configDao.AddOrUpdateConfig(&dto.ConfigUpdateDTO{
-				Name:   name,
-				Key:    key,
-				Value:  value,
-				IsLock: "1",
-				Remark: remark,
-			})
-		}
-		return err
-	}
-
-	current := strings.TrimSpace(config.Value)
-	if current != "" && current != strings.TrimSpace(legacyValue) {
-		return nil
-	}
-
-	return configDao.AddOrUpdateConfig(&dto.ConfigUpdateDTO{
-		ID:     config.ID,
-		Name:   name,
-		Key:    key,
-		Value:  value,
-		IsLock: "1",
-		Remark: remark,
-	})
 }
