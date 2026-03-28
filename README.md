@@ -70,10 +70,8 @@
 ```bash
 mkdir -p /opt/ohome/conf /opt/ohome/data /opt/ohome/log 
 
-docker run -d --name ohome-server --restart unless-stopped -p 18090:18090 -v /opt/ohome/conf:/app/conf -v /opt/ohome/data:/app/data -v /opt/ohome/log:/app/log hanlinwang0606/ohome:runtime-v2026.03.1
+docker run -d --name ohome-server --restart unless-stopped -p 18090:18090 -v /opt/ohome/conf:/app/conf -v /opt/ohome/data:/app/data -v /opt/ohome/log:/app/log hanlinwang0606/ohome:runtime-v2026.03.28
 ```
-
-Docker 镜像默认会以发布模式启动，并自动注入 `MODE_DEVELOP=false`。如果你已经部署过旧版本并且 `/opt/ohome/conf/config.yaml` 里仍然是 `mode.develop: true`，升级镜像后也会被环境变量覆盖；手动部署时也可以显式追加 `-e MODE_DEVELOP=false`。
 
 ### 服务端配置说明
 
