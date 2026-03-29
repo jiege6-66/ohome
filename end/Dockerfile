@@ -29,7 +29,7 @@ FROM alpine:3.19
 WORKDIR /app
 
 ARG VERSION=0.0.1
-ARG DEFAULT_UPDATE_MANIFEST_URL=
+ARG DEFAULT_UPDATE_MANIFEST_URL=https://github.com/leftScience/ohome/releases/latest/download/server.json
 
 ENV GIN_MODE=release
 ENV PORT=18090

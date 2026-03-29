@@ -30,6 +30,7 @@ type DockerRelease struct {
 type BinaryArtifact struct {
 	URL    string `json:"url"`
 	SHA256 string `json:"sha256"`
+	Format string `json:"format,omitempty"`
 }
 
 type ServerManifest struct {

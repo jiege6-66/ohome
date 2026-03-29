@@ -9,6 +9,7 @@ import (
 
 const (
 	defaultUpdaterToken = "ohome-local-updater"
+	defaultManifestURL  = "https://github.com/leftScience/ohome/releases/latest/download/server.json"
 )
 
 func DetectDeployMode() DeployMode {
@@ -16,7 +17,11 @@ func DetectDeployMode() DeployMode {
 }
 
 func ManifestURL() string {
-	return strings.TrimSpace(viper.GetString("update.manifestUrl"))
+	value := strings.TrimSpace(viper.GetString("update.manifestUrl"))
+	if value == "" {
+		return defaultManifestURL
+	}
+	return value
 }
 
 func DefaultChannel() string {

@@ -69,7 +69,7 @@ func (s *RuntimeSupervisor) BootstrapCurrentRelease(defaultVersion string) (stri
 	}
 
 	if releasePath, err := resolveCurrentReleasePath(s.store.CurrentReleaseLink()); err == nil {
-		serverPath := filepath.Join(releasePath, "server")
+		serverPath := filepath.Join(releasePath, ServerExecutableName())
 		if _, statErr := os.Stat(serverPath); statErr == nil {
 			return filepath.Base(releasePath), releasePath, nil
 		}
@@ -82,7 +82,7 @@ func (s *RuntimeSupervisor) BootstrapCurrentRelease(defaultVersion string) (stri
 }
 
 func (s *RuntimeSupervisor) seedEmbeddedRelease(releasePath string, force bool) error {
-	serverPath := filepath.Join(releasePath, "server")
+	serverPath := filepath.Join(releasePath, ServerExecutableName())
 	if !force {
 		if _, err := os.Stat(serverPath); err == nil {
 			return nil
@@ -209,7 +209,7 @@ func resolveCurrentExecutable(linkPath string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	serverPath := filepath.Join(releasePath, "server")
+	serverPath := filepath.Join(releasePath, ServerExecutableName())
 	if _, err := os.Stat(serverPath); err != nil {
 		return "", err
 	}

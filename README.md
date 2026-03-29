@@ -50,6 +50,17 @@ mkdir -p /opt/ohome/conf /opt/ohome/data /opt/ohome/log
 docker run -d --name ohome-server --restart unless-stopped -p 18090:18090 -v /opt/ohome/conf:/app/conf -v /opt/ohome/data:/app/data -v /opt/ohome/log:/app/log hanlinwang0606/ohome:runtime-v2026.03.30
 ```
 
+#### 独立运行包（Windows / macOS / Linux）
+
+从 [releases](https://github.com/leftScience/ohome/releases) 下载对应平台的独立运行包并解压，目录中会自带：
+
+- `launcher[.exe]`
+- `bin/server[.exe]`
+- `conf/config.yaml`
+- `sql/init_data.sql`
+
+首次启动请运行 `launcher`（不要直接运行 `server`），后续 App 可通过“更新管理”页触发后端拉取最新二进制并自动重启服务。
+
 ### 服务端数据持久化
 
 服务端部署时，下面几个目录最重要：

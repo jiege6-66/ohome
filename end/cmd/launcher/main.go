@@ -16,16 +16,16 @@ import (
 	"ohome/updater"
 )
 
-const (
-	embeddedServerPath    = "/app/bin/server"
-	embeddedServerVersion = "/app/bin/server.version"
-)
-
 func main() {
 	conf.InitConfig()
 	global.Logger = conf.InitLogger()
 
 	store := updater.NewStore()
+	embeddedServerPath, embeddedServerVersionPath, err := bundledServerPaths()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err.Error())
+		os.Exit(1)
+	}
 	supervisor := updater.NewRuntimeSupervisor(store, conf.AppBaseDir(), embeddedServerPath)
 	supervisor.SetUnexpectedExitHook(func(err error) {
 		if global.Logger != nil {
@@ -34,7 +34,7 @@ func main() {
 		os.Exit(1)
 	})
 
-	currentVersion, currentReleasePath, err := supervisor.BootstrapCurrentRelease(readEmbeddedServerVersion())
+	currentVersion, currentReleasePath, err := supervisor.BootstrapCurrentRelease(readEmbeddedServerVersion(embeddedServerVersionPath))
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err.Error())
 		os.Exit(1)
@@ -89,8 +89,19 @@ func ensureInitialState(store *updater.Store, currentVersion string, currentRele
 	return store.SaveState(state)
 }
 
-func readEmbeddedServerVersion() string {
-	payload, err := os.ReadFile(embeddedServerVersion)
+func bundledServerPaths() (string, string, error) {
+	execPath, err := os.Executable()
+	if err != nil {
+		return "", "", err
+	}
+	baseDir := filepath.Dir(execPath)
+	return filepath.Join(baseDir, "bin", updater.ServerExecutableName()),
+		filepath.Join(baseDir, "bin", "server.version"),
+		nil
+}
+
+func readEmbeddedServerVersion(path string) string {
+	payload, err := os.ReadFile(path)
 	if err != nil {
 		return buildinfo.CleanVersion()
 	}

@@ -2,6 +2,7 @@ package updater
 
 import (
 	"archive/tar"
+	"archive/zip"
 	"compress/gzip"
 	"crypto/sha256"
 	"encoding/hex"
@@ -10,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 )
 
@@ -59,7 +61,11 @@ func verifySHA256File(path string, expected string) error {
 	return nil
 }
 
-func extractServerArchive(archivePath string, releaseDir string) error {
+func extractServerArchive(archivePath string, releaseDir string, format string) error {
+	return extractServerArchiveForPlatform(archivePath, releaseDir, format, runtime.GOOS)
+}
+
+func extractServerArchiveForPlatform(archivePath string, releaseDir string, format string, goos string) error {
 	if err := os.RemoveAll(releaseDir); err != nil {
 		return err
 	}
@@ -67,54 +73,15 @@ func extractServerArchive(archivePath string, releaseDir string) error {
 		return err
 	}
 
-	file, err := os.Open(archivePath)
-	if err != nil {
-		return err
+	serverPath := filepath.Join(releaseDir, ServerExecutableNameForGOOS(goos))
+	switch normalizeArtifactFormat(format, archivePath) {
+	case artifactFormatTarGz:
+		return extractServerTarGz(archivePath, serverPath, goos)
+	case artifactFormatZip:
+		return extractServerZip(archivePath, serverPath, goos)
+	default:
+		return fmt.Errorf("不支持的更新包格式：%s", format)
 	}
-	defer file.Close()
-
-	gzipReader, err := gzip.NewReader(file)
-	if err != nil {
-		return err
-	}
-	defer gzipReader.Close()
-
-	tarReader := tar.NewReader(gzipReader)
-	serverPath := filepath.Join(releaseDir, "server")
-	foundServer := false
-	for {
-		header, err := tarReader.Next()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return err
-		}
-		switch header.Typeflag {
-		case tar.TypeDir:
-			continue
-		case tar.TypeReg:
-			if filepath.Base(header.Name) != "server" {
-				continue
-			}
-			out, err := os.OpenFile(serverPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o755)
-			if err != nil {
-				return err
-			}
-			if _, err := io.Copy(out, tarReader); err != nil {
-				out.Close()
-				return err
-			}
-			if err := out.Close(); err != nil {
-				return err
-			}
-			foundServer = true
-		}
-	}
-	if !foundServer {
-		return fmt.Errorf("更新包中缺少 server 可执行文件")
-	}
-	return ensureExecutable(serverPath)
 }
 
 func ensureExecutable(path string) error {
@@ -145,11 +112,29 @@ func copyExecutable(src string, dst string) error {
 }
 
 func resolveCurrentReleasePath(linkPath string) (string, error) {
-	resolved, err := filepath.EvalSymlinks(linkPath)
+	info, err := os.Lstat(linkPath)
 	if err != nil {
 		return "", err
 	}
-	return filepath.Clean(resolved), nil
+	if info.Mode()&os.ModeSymlink != 0 {
+		resolved, err := filepath.EvalSymlinks(linkPath)
+		if err != nil {
+			return "", err
+		}
+		return filepath.Clean(resolved), nil
+	}
+	if info.IsDir() {
+		return "", fmt.Errorf("%s 不是有效的当前版本指针文件", linkPath)
+	}
+	payload, err := os.ReadFile(linkPath)
+	if err != nil {
+		return "", err
+	}
+	target := strings.TrimSpace(string(payload))
+	if target == "" {
+		return "", fmt.Errorf("当前版本指针为空：%s", linkPath)
+	}
+	return filepath.Clean(target), nil
 }
 
 func setCurrentReleaseLink(linkPath string, target string) error {
@@ -160,8 +145,7 @@ func setCurrentReleaseLink(linkPath string, target string) error {
 		return err
 	}
 	tmpPath := linkPath + ".tmp"
-	_ = os.Remove(tmpPath)
-	if err := os.Symlink(filepath.Clean(target), tmpPath); err != nil {
+	if err := os.WriteFile(tmpPath, []byte(filepath.Clean(target)), 0o644); err != nil {
 		return err
 	}
 	if err := removeLinkOrFile(linkPath); err != nil {
@@ -190,4 +174,97 @@ func removeLinkOrFile(path string) error {
 		return fmt.Errorf("%s 不是符号链接，拒绝覆盖目录", path)
 	}
 	return os.Remove(path)
+}
+
+func extractServerTarGz(archivePath string, serverPath string, goos string) error {
+	file, err := os.Open(archivePath)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	gzipReader, err := gzip.NewReader(file)
+	if err != nil {
+		return err
+	}
+	defer gzipReader.Close()
+
+	tarReader := tar.NewReader(gzipReader)
+	return extractServerFromTarReader(tarReader, serverPath, goos)
+}
+
+func extractServerFromTarReader(tarReader *tar.Reader, serverPath string, goos string) error {
+	foundServer := false
+	expectedName := ServerExecutableNameForGOOS(goos)
+	for {
+		header, err := tarReader.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return err
+		}
+		switch header.Typeflag {
+		case tar.TypeDir:
+			continue
+		case tar.TypeReg:
+			if filepath.Base(header.Name) != expectedName {
+				continue
+			}
+			out, err := os.OpenFile(serverPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o755)
+			if err != nil {
+				return err
+			}
+			if _, err := io.Copy(out, tarReader); err != nil {
+				out.Close()
+				return err
+			}
+			if err := out.Close(); err != nil {
+				return err
+			}
+			foundServer = true
+		}
+	}
+	if !foundServer {
+		return fmt.Errorf("更新包中缺少 %s 可执行文件", expectedName)
+	}
+	return ensureExecutable(serverPath)
+}
+
+func extractServerZip(archivePath string, serverPath string, goos string) error {
+	reader, err := zip.OpenReader(archivePath)
+	if err != nil {
+		return err
+	}
+	defer reader.Close()
+
+	expectedName := ServerExecutableNameForGOOS(goos)
+	for _, file := range reader.File {
+		if file.FileInfo().IsDir() || filepath.Base(file.Name) != expectedName {
+			continue
+		}
+		input, err := file.Open()
+		if err != nil {
+			return err
+		}
+		output, err := os.OpenFile(serverPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o755)
+		if err != nil {
+			input.Close()
+			return err
+		}
+		if _, err := io.Copy(output, input); err != nil {
+			input.Close()
+			output.Close()
+			return err
+		}
+		if err := input.Close(); err != nil {
+			output.Close()
+			return err
+		}
+		if err := output.Close(); err != nil {
+			return err
+		}
+		return ensureExecutable(serverPath)
+	}
+	return fmt.Errorf("更新包中缺少 %s 可执行文件", expectedName)
 }

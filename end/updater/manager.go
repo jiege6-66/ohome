@@ -232,7 +232,7 @@ func (m *Manager) applyBinary(task *Task, manifest ServerManifest, previousRelea
 	}
 
 	releasePath := filepath.Join(m.store.ReleasesDir(), task.TargetVersion)
-	if err := extractServerArchive(archivePath, releasePath); err != nil {
+	if err := extractServerArchive(archivePath, releasePath, artifact.Format); err != nil {
 		return applyBinaryResult{}, err
 	}
 
@@ -390,10 +390,14 @@ func (m *Manager) failTask(task *Task, err error) {
 }
 
 func selectArtifact(manifest ServerManifest) (string, BinaryArtifact, error) {
-	if runtime.GOOS != "linux" {
-		return "", BinaryArtifact{}, fmt.Errorf("仅支持在 Linux 容器内执行二进制更新")
+	return selectArtifactForPlatform(manifest, runtime.GOOS, runtime.GOARCH)
+}
+
+func selectArtifactForPlatform(manifest ServerManifest, goos string, goarch string) (string, BinaryArtifact, error) {
+	artifactKey, err := ArtifactKeyForPlatform(goos, goarch)
+	if err != nil {
+		return "", BinaryArtifact{}, err
 	}
-	artifactKey := "linux-" + runtime.GOARCH
 	artifact, ok := manifest.Artifacts[artifactKey]
 	if !ok {
 		return "", BinaryArtifact{}, fmt.Errorf("更新清单缺少 %s 对应的二进制产物", artifactKey)
@@ -401,6 +405,7 @@ func selectArtifact(manifest ServerManifest) (string, BinaryArtifact, error) {
 	if strings.TrimSpace(artifact.URL) == "" || strings.TrimSpace(artifact.SHA256) == "" {
 		return "", BinaryArtifact{}, fmt.Errorf("%s 对应的二进制产物信息不完整", artifactKey)
 	}
+	artifact.Format = normalizeArtifactFormat(artifact.Format, artifact.URL)
 	return artifactKey, artifact, nil
 }
 
@@ -411,7 +416,7 @@ func validateRuntimeCompatibility(manifest ServerManifest) error {
 	}
 	currentRuntimeVersion := buildinfo.CleanRuntimeVersion()
 	if CompareVersions(currentRuntimeVersion, minRuntimeVersion) < 0 {
-		return fmt.Errorf("当前运行时版本 %s 低于最低要求 %s，请先手动升级 Docker 镜像", currentRuntimeVersion, minRuntimeVersion)
+		return fmt.Errorf("当前运行时版本 %s 低于最低要求 %s，请先手动升级到最新独立运行包", currentRuntimeVersion, minRuntimeVersion)
 	}
 	return nil
 }
