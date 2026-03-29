@@ -30,11 +30,20 @@ class DiscoveryService {
 
   Future<List<DiscoveredServer>> discoverServers() async {
     final remembered = await _storage.readLastSuccessfulServer();
+    final activeCidr = await _getActiveIpv4Cidr();
     final merged = <String, DiscoveredServer>{};
     final probedOrigins = <String>{};
 
-    if (remembered != null) {
-      final previous = await _probeOrigin(remembered.origin);
+    final canReuseRememberedServer =
+        remembered != null &&
+        activeCidr != null &&
+        _isOriginInSameSubnet(remembered.origin, activeCidr);
+
+    if (canReuseRememberedServer) {
+      final previous = await _probeOrigin(
+        remembered.origin,
+        preserveOrigin: true,
+      );
       if (previous != null) {
         final server = previous.instanceId == remembered.instanceId
             ? previous.merge(
@@ -52,21 +61,26 @@ class DiscoveryService {
       }
     }
 
-    final mdnsServers = await _discoverViaMdns();
+    final mdnsServers = activeCidr == null
+        ? const <DiscoveredServer>[]
+        : await _discoverViaMdns();
     for (final server in mdnsServers) {
       _upsert(merged, server);
       probedOrigins.add(server.origin);
     }
 
     final ports = <int>{_defaultPort};
-    if (remembered != null && remembered.port > 0) {
+    if (canReuseRememberedServer && remembered.port > 0) {
       ports.add(remembered.port);
     }
 
-    final scannedServers = await _discoverViaSubnetScan(
-      ports: ports,
-      skipOrigins: probedOrigins,
-    );
+    final scannedServers = activeCidr == null
+        ? const <DiscoveredServer>[]
+        : await _discoverViaSubnetScan(
+            activeCidr: activeCidr,
+            ports: ports,
+            skipOrigins: probedOrigins,
+          );
     for (final server in scannedServers) {
       _upsert(merged, server);
     }
@@ -151,6 +165,7 @@ class DiscoveryService {
             final origin = 'http://${address.address.address}:${service.port}';
             final server = await _probeOrigin(
               origin,
+              preserveOrigin: true,
               sources: const <DiscoverySource>{DiscoverySource.mdns},
             );
             if (server == null) continue;
@@ -169,13 +184,11 @@ class DiscoveryService {
   }
 
   Future<List<DiscoveredServer>> _discoverViaSubnetScan({
+    required _ActiveIpv4Cidr activeCidr,
     required Set<int> ports,
     required Set<String> skipOrigins,
   }) async {
-    final cidr = await _getActiveIpv4Cidr();
-    if (cidr == null) return const <DiscoveredServer>[];
-
-    final hosts = _enumerateHosts(cidr);
+    final hosts = _enumerateHosts(activeCidr);
     if (hosts.isEmpty) return const <DiscoveredServer>[];
 
     final candidates = <String>[];
@@ -198,6 +211,7 @@ class DiscoveryService {
         batch.map(
           (origin) => _probeOrigin(
             origin,
+            preserveOrigin: true,
             sources: const <DiscoverySource>{DiscoverySource.subnetScan},
           ),
         ),
@@ -212,6 +226,7 @@ class DiscoveryService {
 
   Future<DiscoveredServer?> _probeOrigin(
     String origin, {
+    bool preserveOrigin = false,
     Set<DiscoverySource> sources = const <DiscoverySource>{},
   }) async {
     final normalizedOrigin = _normalizeOrigin(origin);
@@ -224,7 +239,9 @@ class DiscoveryService {
 
       return DiscoveredServer(
         info: info,
-        origin: _originFromApiBaseUrl(info.apiBaseUrl),
+        origin: preserveOrigin
+            ? normalizedOrigin
+            : _originFromApiBaseUrl(info.apiBaseUrl),
         sources: sources,
       );
     } catch (_) {
@@ -336,6 +353,22 @@ class DiscoveryService {
     final uri = Uri.parse(apiBaseUrl);
     final portText = uri.hasPort ? ':${uri.port}' : '';
     return '${uri.scheme}://${uri.host}$portText';
+  }
+
+  bool _isOriginInSameSubnet(String origin, _ActiveIpv4Cidr cidr) {
+    final originUri = Uri.tryParse(origin);
+    final host = originUri?.host.trim() ?? '';
+    if (host.isEmpty) return false;
+
+    final targetAddress = _ipv4ToInt(host);
+    final currentAddress = _ipv4ToInt(cidr.address);
+    if (targetAddress == null || currentAddress == null) return false;
+
+    final hostBits = 32 - cidr.prefixLength;
+    final mask = cidr.prefixLength == 0
+        ? 0
+        : ((0xFFFFFFFF << hostBits) & 0xFFFFFFFF);
+    return (targetAddress & mask) == (currentAddress & mask);
   }
 
   void _upsert(Map<String, DiscoveredServer> target, DiscoveredServer server) {

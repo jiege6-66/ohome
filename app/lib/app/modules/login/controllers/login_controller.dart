@@ -341,20 +341,6 @@ class LoginController extends GetxController {
   bool get hasFoundServer =>
       selectedServer.value != null || discoveredServers.isNotEmpty;
 
-  String get serverStatusText {
-    final selected = selectedServer.value;
-    if (selected != null) {
-      return selected.serviceName;
-    }
-    if (isDiscovering.value) {
-      return '正在查找局域网服务';
-    }
-    if (discoveredServers.isNotEmpty) {
-      return '已找到 ${discoveredServers.length} 个局域网服务';
-    }
-    return '手动输入或重新扫描';
-  }
-
   void _applySelectedServer(
     DiscoveredServer server, {
     required bool userInitiated,

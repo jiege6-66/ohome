@@ -4,8 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:get/get.dart';
 
-import '../../../data/models/discovered_server.dart';
 import '../../../theme/app_theme.dart';
+import '../../../widgets/server_settings_sheet.dart';
 import '../controllers/login_controller.dart';
 
 class LoginView extends GetView<LoginController> {
@@ -227,313 +227,25 @@ class _SettingsIconButton extends GetView<LoginController> {
 
   Future<void> _openServerSettingsSheet(BuildContext context) {
     return Get.bottomSheet<void>(
-      const _ServerSettingsSheet(),
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-    );
-  }
-}
-
-class _ServerSettingsSheet extends GetView<LoginController> {
-  const _ServerSettingsSheet();
-
-  @override
-  Widget build(BuildContext context) {
-    final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
-
-    return Container(
-      padding: EdgeInsets.fromLTRB(20.w, 16.h, 20.w, 20.h + bottomInset),
-      decoration: BoxDecoration(
-        color: const Color(0xFF171717),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28.r)),
-      ),
-      child: SafeArea(
-        top: false,
-        child: SingleChildScrollView(
-          child: Obx(() {
-            final servers = controller.discoveredServers;
-            final errorText = controller.discoveryErrorMessage.value;
-            final isDiscovering = controller.isDiscovering.value;
-            final isManualEntryMode = controller.isManualEntryMode.value;
-
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Center(
-                  child: Container(
-                    width: 42.w,
-                    height: 4.h,
-                    decoration: BoxDecoration(
-                      color: Colors.white24,
-                      borderRadius: BorderRadius.circular(999.r),
-                    ),
-                  ),
-                ),
-                SizedBox(height: 18.h),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      '服务器设置',
-                      style: TextStyle(
-                        fontSize: 20.sp,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white,
-                      ),
-                    ),
-                    TextButton(
-                      onPressed: isManualEntryMode || isDiscovering
-                          ? null
-                          : controller.refreshDiscovery,
-                      child: Text(
-                        isManualEntryMode
-                            ? '手动输入中'
-                            : (isDiscovering ? '扫描中...' : '重新扫描'),
-                      ),
-                    ),
-                  ],
-                ),
-                SizedBox(height: 20.h),
-                Container(
-                  width: double.infinity,
-                  padding: EdgeInsets.symmetric(
-                    horizontal: 16.w,
-                    vertical: 14.h,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.04),
-                    borderRadius: BorderRadius.circular(18.r),
-                    border: Border.all(
-                      color: isManualEntryMode
-                          ? AppThemeColors.primary.withValues(alpha: 0.6)
-                          : Colors.white12,
-                    ),
-                  ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              '手动输入',
-                              style: TextStyle(
-                                fontSize: 15.sp,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      SizedBox(width: 12.w),
-                      Switch.adaptive(
-                        value: isManualEntryMode,
-                        activeThumbColor: AppThemeColors.primary,
-                        activeTrackColor: AppThemeColors.primary.withValues(
-                          alpha: 0.45,
-                        ),
-                        onChanged: controller.toggleManualEntryMode,
-                      ),
-                    ],
-                  ),
-                ),
-                SizedBox(height: 16.h),
-                if (errorText != null && errorText.isNotEmpty)
-                  Padding(
-                    padding: EdgeInsets.only(bottom: 12.h),
-                    child: Text(
-                      errorText,
-                      style: TextStyle(
-                        fontSize: 13.sp,
-                        color: Colors.redAccent.shade100,
-                      ),
-                    ),
-                  ),
-                if (!isManualEntryMode && isDiscovering)
-                  Container(
-                    width: double.infinity,
-                    padding: EdgeInsets.symmetric(
-                      horizontal: 16.w,
-                      vertical: 16.h,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.04),
-                      borderRadius: BorderRadius.circular(18.r),
-                      border: Border.all(color: Colors.white12),
-                    ),
-                    child: Row(
-                      children: [
-                        SizedBox(
-                          width: 16.w,
-                          height: 16.w,
-                          child: const CircularProgressIndicator(
-                            strokeWidth: 2,
-                          ),
-                        ),
-                        SizedBox(width: 12.w),
-                        Text(
-                          '正在查找局域网服务...',
-                          style: TextStyle(
-                            fontSize: 13.sp,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                if (!isManualEntryMode && !isDiscovering && servers.isEmpty)
-                  Container(
-                    width: double.infinity,
-                    padding: EdgeInsets.symmetric(
-                      horizontal: 16.w,
-                      vertical: 16.h,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.04),
-                      borderRadius: BorderRadius.circular(18.r),
-                      border: Border.all(color: Colors.white12),
-                    ),
-                    child: Text(
-                      '暂未发现服务，请重试或手动输入地址。',
-                      style: TextStyle(fontSize: 13.sp, color: Colors.white70),
-                    ),
-                  ),
-                if (!isManualEntryMode && servers.isNotEmpty)
-                  ...servers.map(
-                    (server) => Padding(
-                      padding: EdgeInsets.only(bottom: 12.h),
-                      child: _ServerCard(server: server),
-                    ),
-                  ),
-                if (isManualEntryMode) ...[
-                  SizedBox(height: 4.h),
-                  Text(
-                    '手动地址',
-                    style: TextStyle(
-                      fontSize: 14.sp,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white,
-                    ),
-                  ),
-                  SizedBox(height: 8.h),
-                  TextField(
-                    controller: controller.apiBaseUrlController,
-                    keyboardType: TextInputType.url,
-                    style: TextStyle(color: Colors.white, fontSize: 15.sp),
-                    decoration: InputDecoration(
-                      hintText: 'http://iosjk.xyz:18090',
-                      hintStyle: TextStyle(
-                        color: Colors.white38,
-                        fontSize: 15.sp,
-                      ),
-                      filled: true,
-                      fillColor: Colors.white.withValues(alpha: 0.04),
-                      contentPadding: EdgeInsets.symmetric(
-                        horizontal: 16.w,
-                        vertical: 18.h,
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(18.r),
-                        borderSide: BorderSide(color: Colors.grey.shade800),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(18.r),
-                        borderSide: const BorderSide(
-                          color: AppThemeColors.primary,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ],
-            );
-          }),
-        ),
-      ),
-    );
-  }
-}
-
-class _ServerCard extends GetView<LoginController> {
-  const _ServerCard({required this.server});
-
-  final DiscoveredServer server;
-
-  @override
-  Widget build(BuildContext context) {
-    return Obx(() {
-      final selected = controller.selectedServer.value;
-      final isSelected =
-          selected?.instanceId == server.instanceId &&
-          selected?.origin == server.origin;
-
-      return Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(18.r),
-          onTap: () {
+      Obx(
+        () => ServerSettingsSheet(
+          apiBaseUrlController: controller.apiBaseUrlController,
+          servers: controller.discoveredServers,
+          errorText: controller.discoveryErrorMessage.value,
+          isDiscovering: controller.isDiscovering.value,
+          isManualEntryMode: controller.isManualEntryMode.value,
+          selectedServer: controller.selectedServer.value,
+          onToggleManualEntryMode: controller.toggleManualEntryMode,
+          onRefreshDiscovery: controller.refreshDiscovery,
+          onSelectServer: (server) {
             controller.selectDiscoveredServer(server);
             Get.back<void>();
           },
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 180),
-            padding: EdgeInsets.all(16.w),
-            decoration: BoxDecoration(
-              color: isSelected
-                  ? AppThemeColors.primary.withValues(alpha: 0.18)
-                  : Colors.white.withValues(alpha: 0.04),
-              borderRadius: BorderRadius.circular(18.r),
-              border: Border.all(
-                color: isSelected ? AppThemeColors.primary : Colors.white12,
-              ),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(
-                      child: Text(
-                        server.serviceName,
-                        style: TextStyle(
-                          fontSize: 15.sp,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
-                    if (isSelected)
-                      Icon(
-                        Icons.check_circle_rounded,
-                        color: AppThemeColors.primary,
-                        size: 18.sp,
-                      ),
-                  ],
-                ),
-                SizedBox(height: 6.h),
-                Text(
-                  server.origin,
-                  style: TextStyle(fontSize: 12.sp, color: Colors.white70),
-                ),
-                SizedBox(height: 8.h),
-                Wrap(
-                  spacing: 8.w,
-                  runSpacing: 8.h,
-                  children: [
-                    _Tag(text: 'v${server.version}'),
-                    ...server.sourceLabels.map((label) => _Tag(text: label)),
-                  ],
-                ),
-              ],
-            ),
-          ),
         ),
-      );
-    });
+      ),
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+    );
   }
 }
 
@@ -588,27 +300,6 @@ class _CredentialsFields extends GetView<LoginController> {
         borderSide: const BorderSide(color: AppThemeColors.primary, width: 1.5),
       ),
       errorStyle: TextStyle(color: Colors.redAccent.shade100, fontSize: 12.sp),
-    );
-  }
-}
-
-class _Tag extends StatelessWidget {
-  const _Tag({required this.text});
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 6.h),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(999.r),
-      ),
-      child: Text(
-        text,
-        style: TextStyle(fontSize: 11.sp, color: Colors.white70),
-      ),
     );
   }
 }
