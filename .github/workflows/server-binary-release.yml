@@ -74,6 +74,25 @@ jobs:
             echo "RECOMMENDED_RUNTIME_VERSION=${RUNTIME_VERSION}"
           } >> "$GITHUB_ENV"
 
+      - name: Derive packaged manifest URL
+        shell: bash
+        run: |
+          MINIO_ENDPOINT="${{ secrets.MINIO_ENDPOINT }}"
+          MINIO_ENDPOINT="${MINIO_ENDPOINT%/}"
+          MINIO_BUCKET="${{ secrets.MINIO_BUCKET }}"
+          MINIO_PUBLIC_BASE_URL="${{ secrets.MINIO_PUBLIC_BASE_URL }}"
+          MINIO_PUBLIC_BASE_URL="${MINIO_PUBLIC_BASE_URL%/}"
+
+          if [[ -n "${MINIO_PUBLIC_BASE_URL}" ]]; then
+            PACKAGED_UPDATE_MANIFEST_URL="${MINIO_PUBLIC_BASE_URL}/server/server.json"
+          elif [[ -n "${MINIO_ENDPOINT}" && -n "${MINIO_BUCKET}" ]]; then
+            PACKAGED_UPDATE_MANIFEST_URL="${MINIO_ENDPOINT}/${MINIO_BUCKET}/server/server.json"
+          else
+            PACKAGED_UPDATE_MANIFEST_URL="https://github.com/${GITHUB_REPOSITORY}/releases/latest/download/server.json"
+          fi
+
+          echo "PACKAGED_UPDATE_MANIFEST_URL=${PACKAGED_UPDATE_MANIFEST_URL}" >> "$GITHUB_ENV"
+
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
@@ -116,6 +135,22 @@ jobs:
             -o "${LAUNCHER_OUTPUT}" ./cmd/launcher
 
           cp conf/config.release.yaml "${CONF_DIR}/config.yaml"
+          export CONF_DIR
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          config_path = Path(os.environ["CONF_DIR"]) / "config.yaml"
+          manifest_url = os.environ["PACKAGED_UPDATE_MANIFEST_URL"].strip()
+          original = config_path.read_text(encoding="utf-8")
+          target = '  manifestUrl: ""'
+          if target not in original:
+            raise SystemExit(f"missing manifestUrl placeholder in {config_path}")
+          config_path.write_text(
+              original.replace(target, f'  manifestUrl: "{manifest_url}"', 1),
+              encoding="utf-8",
+          )
+          PY
           cp sql/init_data.sql "${SQL_DIR}/init_data.sql"
           printf "%s" "${GITHUB_REF_NAME}" > "${BIN_DIR}/server.version"
 
