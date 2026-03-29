@@ -737,9 +737,17 @@ class _ResourceCardPageState extends State<ResourceCardPage> {
       return;
     }
 
-    final selectedApplication = await _selectMoveTargetApplication(targets);
+    final selectableTargets = _filterMoveTargets(targets);
+    if (selectableTargets.isEmpty) {
+      Get.snackbar('提示', '未找到可用移动目标');
+      return;
+    }
+
+    final selectedApplication = await _selectMoveTargetApplication(
+      selectableTargets,
+    );
     if (selectedApplication == null || selectedApplication.isEmpty) return;
-    if (_findMoveTarget(targets, selectedApplication) == null) {
+    if (_findMoveTarget(selectableTargets, selectedApplication) == null) {
       Get.snackbar('提示', '移动目标不存在');
       return;
     }
@@ -783,6 +791,16 @@ class _ResourceCardPageState extends State<ResourceCardPage> {
     if (result.failedCount > 0) {
       Get.snackbar('提示', '${result.failedCount} 项移动失败');
     }
+  }
+
+  List<QuarkConfigOption> _filterMoveTargets(List<QuarkConfigOption> targets) {
+    return targets
+        .where((target) => !_isUploadApplication(target.application))
+        .toList(growable: false);
+  }
+
+  bool _isUploadApplication(String application) {
+    return application.trim().toLowerCase() == 'upload';
   }
 
   Future<String?> _selectMoveTargetApplication(
