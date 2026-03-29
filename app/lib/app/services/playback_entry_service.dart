@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 
 import '../data/models/media_history_entry.dart';
 import '../data/models/quark_file_entry.dart';
+import '../utils/backend_url_resolver.dart';
 import '../utils/media_path.dart';
 
 typedef PlaybackStreamUriBuilder = Uri? Function(WebdavFileEntry file);
@@ -126,7 +127,9 @@ class PlaybackEntryConfig {
     String applicationType,
     WebdavFileEntry entry,
   ) {
-    return entry.resolveStreamUri(applicationType: applicationType);
+    final raw = entry.resolveStreamUrl(applicationType: applicationType);
+    if (raw.isEmpty) return null;
+    return Uri.tryParse(BackendUrlResolver.resolve(raw));
   }
 }
 

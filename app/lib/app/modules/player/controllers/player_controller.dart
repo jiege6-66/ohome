@@ -1410,8 +1410,11 @@ class PlayerController extends GetxController {
     return _videoExtensions.any(lower.endsWith);
   }
 
-  String _resolveEntryStreamUrl(WebdavFileEntry entry) {
-    return entry.resolveStreamUrl(applicationType: _applicationType);
+  String _resolveEntryStreamUrl(WebdavFileEntry entry, {String? mode}) {
+    return _applyPlaybackProxyModeToUrl(
+      entry.resolveStreamUrl(applicationType: _applicationType),
+      mode: mode,
+    );
   }
 
   void _syncInitialIndexWithResumePath() {
