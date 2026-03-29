@@ -67,7 +67,7 @@ func (a *QuarkFs) StreamQuarkFile(c *gin.Context) {
 
 	isCast := c.Query("cast") == "true"
 	rangeHeader := c.GetHeader("Range")
-	if shouldRedirectQuarkStream(c) {
+	if !isCast && shouldRedirectQuarkStream(c) {
 		directURL, _, err := quarkFsService.GetDirectFileLink(c.Request.Context(), &pathDTO)
 		if err != nil {
 			utils.FailWithMessage(err.Error(), c)

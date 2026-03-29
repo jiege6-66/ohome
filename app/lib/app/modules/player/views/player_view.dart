@@ -1190,7 +1190,7 @@ class _PlayerViewState extends State<PlayerView> with WidgetsBindingObserver {
 
     const options = <({String value, String title, String subtitle})>[
       (value: 'native_proxy', title: '本地代理', subtitle: '稳定，适合大多数播放场景'),
-      (value: '302_redirect', title: '302', subtitle: '直连转码，仅当前视频生效'),
+      (value: '302_redirect', title: '302', subtitle: '直连转码，仅本地播放；投屏不支持'),
     ];
 
     Widget buildBody(BuildContext ctx) {

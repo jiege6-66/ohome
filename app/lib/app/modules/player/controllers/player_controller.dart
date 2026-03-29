@@ -1009,7 +1009,24 @@ class PlayerController extends GetxController {
   }
 
   String? _castUrlForEpisode(Episode episode) {
-    final streamUrl = _episodeUrl(episode);
+    final path = episode.path?.trim();
+    final rawUrl = episode.url?.trim();
+    String? streamUrl;
+    if (rawUrl != null && rawUrl.isNotEmpty) {
+      if (_isLocalProxyStreamUrl(rawUrl)) {
+        streamUrl = _applyPlaybackProxyModeToUrl(
+          rawUrl,
+          mode: _defaultPlaybackProxyMode,
+        );
+      } else if (path == null || path.isEmpty) {
+        streamUrl = rawUrl;
+      }
+    }
+    if ((streamUrl == null || streamUrl.isEmpty) &&
+        path != null &&
+        path.isNotEmpty) {
+      streamUrl = _buildStreamUrl(path, mode: _defaultPlaybackProxyMode);
+    }
     if (streamUrl == null || streamUrl.isEmpty) return null;
     if (!_isLocalProxyStreamUrl(streamUrl)) {
       return streamUrl;
