@@ -45,9 +45,6 @@ class AppEnv {
 
   bool get isUsingDefaultApiBaseUrl => _apiBaseUrl == _defaultApiBaseUrl;
 
-  String get defaultApiBaseUrlInputValue =>
-      _toApiBaseUrlInputValue(_defaultApiBaseUrl);
-
   String get apiBaseUrlInputValue => _toApiBaseUrlInputValue(_apiBaseUrl);
 
   String _toApiBaseUrlInputValue(String value) {

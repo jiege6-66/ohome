@@ -410,35 +410,13 @@ class _ServerSettingsSheet extends GetView<LoginController> {
                   ),
                 if (isManualEntryMode) ...[
                   SizedBox(height: 4.h),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        '手动地址',
-                        style: TextStyle(
-                          fontSize: 14.sp,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.white,
-                        ),
-                      ),
-                      TextButton(
-                        onPressed: controller.applyDefaultApiBaseUrl,
-                        style: TextButton.styleFrom(
-                          foregroundColor: AppThemeColors.primary,
-                          padding: EdgeInsets.zero,
-                          minimumSize: Size.zero,
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        ),
-                        child: Text(
-                          '默认地址',
-                          style: TextStyle(
-                            fontSize: 13.sp,
-                            fontWeight: FontWeight.w600,
-                            color: AppThemeColors.primary,
-                          ),
-                        ),
-                      ),
-                    ],
+                  Text(
+                    '手动地址',
+                    style: TextStyle(
+                      fontSize: 14.sp,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                    ),
                   ),
                   SizedBox(height: 8.h),
                   TextField(
