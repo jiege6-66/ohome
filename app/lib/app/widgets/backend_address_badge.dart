@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 
@@ -8,7 +9,8 @@ class BackendAddressBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDesktop = MediaQuery.sizeOf(context).width >= 900;
+    final isDesktop = _isNativeDesktopPlatform() ||
+        MediaQuery.sizeOf(context).width >= 900;
 
     return ConstrainedBox(
       constraints: BoxConstraints(maxWidth: isDesktop ? 320 : 220.w),
@@ -49,3 +51,9 @@ class BackendAddressBadge extends StatelessWidget {
     );
   }
 }
+
+bool _isNativeDesktopPlatform() =>
+    !kIsWeb &&
+    (defaultTargetPlatform == TargetPlatform.macOS ||
+        defaultTargetPlatform == TargetPlatform.windows ||
+        defaultTargetPlatform == TargetPlatform.linux);

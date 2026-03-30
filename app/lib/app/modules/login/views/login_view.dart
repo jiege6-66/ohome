@@ -1,5 +1,6 @@
 import 'dart:ui';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:get/get.dart';
@@ -160,6 +161,8 @@ class _Header extends StatelessWidget {
             children: [
               Text(
                 '欢迎回来',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   fontSize: _rs(context, 15, 14),
                   fontWeight: FontWeight.w400,
@@ -170,6 +173,9 @@ class _Header extends StatelessWidget {
               SizedBox(height: _rh(context, 4, 4)),
               Text(
                 '登录',
+                maxLines: 1,
+                softWrap: false,
+                overflow: TextOverflow.visible,
                 style: TextStyle(
                   fontSize: _rs(context, 34, 28),
                   fontWeight: FontWeight.w800,
@@ -443,7 +449,13 @@ class _RegisterEntryButton extends GetView<LoginController> {
 }
 
 bool _isDesktopLayout(BuildContext context) =>
-    MediaQuery.sizeOf(context).width >= 900;
+    _isNativeDesktopPlatform() || MediaQuery.sizeOf(context).width >= 900;
+
+bool _isNativeDesktopPlatform() =>
+    !kIsWeb &&
+    (defaultTargetPlatform == TargetPlatform.macOS ||
+        defaultTargetPlatform == TargetPlatform.windows ||
+        defaultTargetPlatform == TargetPlatform.linux);
 
 double _rw(BuildContext context, double mobile, double desktop) =>
     _isDesktopLayout(context) ? desktop : mobile.w;
