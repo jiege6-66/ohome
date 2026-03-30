@@ -16,17 +16,18 @@ class LoginView extends GetView<LoginController> {
   @override
   Widget build(BuildContext context) {
     final viewInsets = MediaQuery.viewInsetsOf(context);
+    final isDesktop = _isDesktopLayout(context);
 
     return Scaffold(
       body: Stack(
         children: [
           Container(color: const Color(0xFF0F172A)),
           Positioned(
-            top: -140.h,
-            right: -50.w,
+            top: -_rh(context, 140, 120),
+            right: -_rw(context, 50, 40),
             child: Container(
-              width: 300.w,
-              height: 300.w,
+              width: _rw(context, 300, 260),
+              height: _rw(context, 300, 260),
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: const Color(0xFF3B82F6).withValues(alpha: 0.4),
@@ -34,11 +35,11 @@ class LoginView extends GetView<LoginController> {
             ),
           ),
           Positioned(
-            bottom: -50.h,
-            left: -100.w,
+            bottom: -_rh(context, 50, 40),
+            left: -_rw(context, 100, 80),
             child: Container(
-              width: 250.w,
-              height: 250.w,
+              width: _rw(context, 250, 220),
+              height: _rw(context, 250, 220),
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: const Color(0xFF8B5CF6).withValues(alpha: 0.4),
@@ -50,77 +51,92 @@ class LoginView extends GetView<LoginController> {
             child: Container(color: Colors.transparent),
           ),
           SafeArea(
-            child: Stack(
-              children: [
-                SingleChildScrollView(
-                  padding: EdgeInsets.only(bottom: viewInsets.bottom),
-                  child: Center(
-                    child: Padding(
-                      padding: EdgeInsets.only(top: 80.h, bottom: 24.h),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(32.r),
-                        child: BackdropFilter(
-                          filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-                          child: Container(
-                            width: 340.w,
-                            padding: EdgeInsets.fromLTRB(
-                              32.w,
-                              40.h,
-                              32.w,
-                              32.h,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.04),
-                              borderRadius: BorderRadius.circular(32.r),
-                              border: Border.all(
-                                color: Colors.white.withValues(alpha: 0.1),
-                                width: 1,
+            child: SingleChildScrollView(
+              padding: EdgeInsets.fromLTRB(
+                _rw(context, 20, 32),
+                _rh(context, 16, 24),
+                _rw(context, 20, 32),
+                viewInsets.bottom + _rh(context, 24, 32),
+              ),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(maxWidth: isDesktop ? 1040 : 420),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: ValueListenableBuilder<TextEditingValue>(
+                          valueListenable: controller.apiBaseUrlController,
+                          builder: (context, value, _) {
+                            final address = value.text.trim().isEmpty
+                                ? AppEnv.instance.apiBaseUrlInputValue
+                                : value.text.trim();
+                            return Wrap(
+                              alignment: WrapAlignment.end,
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              spacing: _rw(context, 12, 12),
+                              runSpacing: _rh(context, 12, 10),
+                              children: [
+                                BackendAddressBadge(address: address),
+                                const _SettingsIconButton(),
+                              ],
+                            );
+                          },
+                        ),
+                      ),
+                      SizedBox(height: _rh(context, 64, 40)),
+                      Center(
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(
+                            _rr(context, 32, 24),
+                          ),
+                          child: BackdropFilter(
+                            filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+                            child: Container(
+                              width: isDesktop ? 420 : _rw(context, 340, 420),
+                              padding: EdgeInsets.fromLTRB(
+                                _rw(context, 32, 32),
+                                _rh(context, 40, 32),
+                                _rw(context, 32, 32),
+                                _rh(context, 32, 28),
                               ),
-                            ),
-                            child: Obx(
-                              () => Form(
-                                key: controller.loginFormKey,
-                                autovalidateMode:
-                                    controller.autoValidateMode.value,
-                                child: Column(
-                                  children: [
-                                    const _Header(),
-                                    SizedBox(height: 28.h),
-                                    const _CredentialsFields(),
-                                    SizedBox(height: 28.h),
-                                    const _SubmitButton(),
-                                    SizedBox(height: 14.h),
-                                    const _RegisterEntryButton(),
-                                  ],
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.04),
+                                borderRadius: BorderRadius.circular(
+                                  _rr(context, 32, 24),
+                                ),
+                                border: Border.all(
+                                  color: Colors.white.withValues(alpha: 0.1),
+                                  width: 1,
+                                ),
+                              ),
+                              child: Obx(
+                                () => Form(
+                                  key: controller.loginFormKey,
+                                  autovalidateMode:
+                                      controller.autoValidateMode.value,
+                                  child: Column(
+                                    children: [
+                                      const _Header(),
+                                      SizedBox(height: _rh(context, 28, 24)),
+                                      const _CredentialsFields(),
+                                      SizedBox(height: _rh(context, 28, 24)),
+                                      const _SubmitButton(),
+                                      SizedBox(height: _rh(context, 14, 12)),
+                                      const _RegisterEntryButton(),
+                                    ],
+                                  ),
                                 ),
                               ),
                             ),
                           ),
                         ),
                       ),
-                    ),
+                    ],
                   ),
                 ),
-                Positioned(
-                  top: 16.h,
-                  right: 24.w,
-                  child: ValueListenableBuilder<TextEditingValue>(
-                    valueListenable: controller.apiBaseUrlController,
-                    builder: (context, value, _) {
-                      final address = value.text.trim().isEmpty
-                          ? AppEnv.instance.apiBaseUrlInputValue
-                          : value.text.trim();
-                      return Row(
-                        children: [
-                          BackendAddressBadge(address: address),
-                          SizedBox(width: 12.w),
-                          const _SettingsIconButton(),
-                        ],
-                      );
-                    },
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
         ],
@@ -145,38 +161,38 @@ class _Header extends StatelessWidget {
               Text(
                 '欢迎回来',
                 style: TextStyle(
-                  fontSize: 15.sp,
+                  fontSize: _rs(context, 15, 14),
                   fontWeight: FontWeight.w400,
                   color: Colors.white70,
                   letterSpacing: 1.1,
                 ),
               ),
-              SizedBox(height: 4.h),
+              SizedBox(height: _rh(context, 4, 4)),
               Text(
                 '登录',
                 style: TextStyle(
-                  fontSize: 34.sp,
+                  fontSize: _rs(context, 34, 28),
                   fontWeight: FontWeight.w800,
                   color: Colors.white,
-                  letterSpacing: 1.5,
+                  letterSpacing: 1.2,
                 ),
               ),
             ],
           ),
         ),
         Container(
-          padding: EdgeInsets.all(4.w),
+          padding: EdgeInsets.all(_rw(context, 4, 4)),
           decoration: BoxDecoration(
             color: Colors.white.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(16.r),
+            borderRadius: BorderRadius.circular(_rr(context, 16, 14)),
             border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
           ),
           child: ClipRRect(
-            borderRadius: BorderRadius.circular(12.r),
+            borderRadius: BorderRadius.circular(_rr(context, 12, 10)),
             child: Image.asset(
               'assets/images/logo.png',
-              width: 56.w,
-              height: 56.w,
+              width: _rw(context, 56, 48),
+              height: _rw(context, 56, 48),
               fit: BoxFit.cover,
             ),
           ),
@@ -200,29 +216,29 @@ class _SettingsIconButton extends GetView<LoginController> {
           clipBehavior: Clip.none,
           children: [
             Container(
-              width: 44.w,
-              height: 44.w,
+              width: _rw(context, 44, 40),
+              height: _rw(context, 44, 40),
               decoration: BoxDecoration(
                 color: Colors.white.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(14.r),
+                borderRadius: BorderRadius.circular(_rr(context, 14, 12)),
                 border: Border.all(color: Colors.white12),
               ),
               child: Icon(
                 Icons.settings_rounded,
-                size: 22.sp,
+                size: _rs(context, 22, 20),
                 color: Colors.white,
               ),
             ),
             if (hasFoundServer)
               Positioned(
-                top: -4.h,
-                right: -4.w,
+                top: -_rh(context, 4, 4),
+                right: -_rw(context, 4, 4),
                 child: Container(
-                  width: 18.w,
-                  height: 18.w,
+                  width: _rw(context, 18, 16),
+                  height: _rw(context, 18, 16),
                   decoration: BoxDecoration(
                     color: const Color(0xFF21C47B),
-                    borderRadius: BorderRadius.circular(999.r),
+                    borderRadius: BorderRadius.circular(999),
                     border: Border.all(
                       color: const Color(0xFF1E1E1E),
                       width: 2,
@@ -230,7 +246,7 @@ class _SettingsIconButton extends GetView<LoginController> {
                   ),
                   child: Icon(
                     Icons.check_rounded,
-                    size: 10.sp,
+                    size: _rs(context, 10, 9),
                     color: Colors.white,
                   ),
                 ),
@@ -274,19 +290,21 @@ class _CredentialsFields extends GetView<LoginController> {
       children: [
         TextFormField(
           controller: controller.nameController,
-          style: TextStyle(color: Colors.white, fontSize: 16.sp),
+          style: TextStyle(color: Colors.white, fontSize: _rs(context, 16, 15)),
           decoration: _fieldDecoration(
+            context,
             hintText: '输入用户名',
             icon: Icons.person_outline_rounded,
           ),
           validator: controller.validateName,
         ),
-        SizedBox(height: 18.h),
+        SizedBox(height: _rh(context, 18, 16)),
         TextFormField(
           controller: controller.passwordController,
           obscureText: true,
-          style: TextStyle(color: Colors.white, fontSize: 16.sp),
+          style: TextStyle(color: Colors.white, fontSize: _rs(context, 16, 15)),
           decoration: _fieldDecoration(
+            context,
             hintText: '输入密码',
             icon: Icons.lock_outline_rounded,
           ),
@@ -296,26 +314,33 @@ class _CredentialsFields extends GetView<LoginController> {
     );
   }
 
-  InputDecoration _fieldDecoration({
+  InputDecoration _fieldDecoration(
+    BuildContext context, {
     required String hintText,
     required IconData icon,
   }) {
     return InputDecoration(
       hintText: hintText,
-      hintStyle: TextStyle(color: Colors.white54, fontSize: 15.sp),
-      prefixIcon: Icon(icon, color: Colors.white54, size: 22.sp),
+      hintStyle: TextStyle(color: Colors.white54, fontSize: _rs(context, 15, 14)),
+      prefixIcon: Icon(icon, color: Colors.white54, size: _rs(context, 22, 20)),
       filled: true,
       fillColor: Colors.white.withValues(alpha: 0.05),
-      contentPadding: EdgeInsets.symmetric(vertical: 18.h, horizontal: 20.w),
+      contentPadding: EdgeInsets.symmetric(
+        vertical: _rh(context, 18, 16),
+        horizontal: _rw(context, 20, 18),
+      ),
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(16.r),
+        borderRadius: BorderRadius.circular(_rr(context, 16, 14)),
         borderSide: BorderSide.none,
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(16.r),
+        borderRadius: BorderRadius.circular(_rr(context, 16, 14)),
         borderSide: const BorderSide(color: AppThemeColors.primary, width: 1.5),
       ),
-      errorStyle: TextStyle(color: Colors.redAccent.shade100, fontSize: 12.sp),
+      errorStyle: TextStyle(
+        color: Colors.redAccent.shade100,
+        fontSize: _rs(context, 12, 12),
+      ),
     );
   }
 }
@@ -327,9 +352,9 @@ class _SubmitButton extends GetView<LoginController> {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      height: 52.h,
+      height: _rh(context, 52, 48),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16.r),
+        borderRadius: BorderRadius.circular(_rr(context, 16, 14)),
         gradient: const LinearGradient(
           colors: [Color(0xFF3B82F6), Color(0xFF2563EB)],
           begin: Alignment.centerLeft,
@@ -338,8 +363,8 @@ class _SubmitButton extends GetView<LoginController> {
         boxShadow: [
           BoxShadow(
             color: const Color(0xFF3B82F6).withValues(alpha: 0.3),
-            blurRadius: 12.r,
-            offset: Offset(0, 4.h),
+            blurRadius: _rr(context, 12, 10),
+            offset: Offset(0, _rh(context, 4, 4)),
           ),
         ],
       ),
@@ -349,14 +374,14 @@ class _SubmitButton extends GetView<LoginController> {
           backgroundColor: Colors.transparent,
           shadowColor: Colors.transparent,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16.r),
+            borderRadius: BorderRadius.circular(_rr(context, 16, 14)),
           ),
         ),
         child: Obx(
           () => controller.isLoading.value
               ? SizedBox(
-                  width: 24.sp,
-                  height: 24.sp,
+                  width: _rs(context, 24, 20),
+                  height: _rs(context, 24, 20),
                   child: const CircularProgressIndicator(
                     strokeWidth: 2.5,
                     valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
@@ -365,10 +390,10 @@ class _SubmitButton extends GetView<LoginController> {
               : Text(
                   '立即登录',
                   style: TextStyle(
-                    fontSize: 16.sp,
+                    fontSize: _rs(context, 16, 15),
                     fontWeight: FontWeight.w600,
                     color: Colors.white,
-                    letterSpacing: 1.2,
+                    letterSpacing: 1.1,
                   ),
                 ),
         ),
@@ -395,7 +420,7 @@ class _RegisterEntryButton extends GetView<LoginController> {
         child: Text.rich(
           TextSpan(
             style: TextStyle(
-              fontSize: 13.sp,
+              fontSize: _rs(context, 13, 13),
               color: Colors.white70,
               fontWeight: FontWeight.w500,
             ),
@@ -416,3 +441,18 @@ class _RegisterEntryButton extends GetView<LoginController> {
     );
   }
 }
+
+bool _isDesktopLayout(BuildContext context) =>
+    MediaQuery.sizeOf(context).width >= 900;
+
+double _rw(BuildContext context, double mobile, double desktop) =>
+    _isDesktopLayout(context) ? desktop : mobile.w;
+
+double _rh(BuildContext context, double mobile, double desktop) =>
+    _isDesktopLayout(context) ? desktop : mobile.h;
+
+double _rs(BuildContext context, double mobile, double desktop) =>
+    _isDesktopLayout(context) ? desktop : mobile.sp;
+
+double _rr(BuildContext context, double mobile, double desktop) =>
+    _isDesktopLayout(context) ? desktop : mobile.r;

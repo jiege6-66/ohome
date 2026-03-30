@@ -8,27 +8,36 @@ class BackendAddressBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDesktop = MediaQuery.sizeOf(context).width >= 900;
+
     return ConstrainedBox(
-      constraints: BoxConstraints(maxWidth: 220.w),
+      constraints: BoxConstraints(maxWidth: isDesktop ? 320 : 220.w),
       child: Container(
-        padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 10.h),
+        padding: EdgeInsets.symmetric(
+          horizontal: isDesktop ? 12 : 12.w,
+          vertical: isDesktop ? 10 : 10.h,
+        ),
         decoration: BoxDecoration(
           color: Colors.white.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(14.r),
+          borderRadius: BorderRadius.circular(isDesktop ? 12 : 14.r),
           border: Border.all(color: Colors.white12),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.dns_rounded, size: 16.sp, color: Colors.white70),
-            SizedBox(width: 8.w),
+            Icon(
+              Icons.dns_rounded,
+              size: isDesktop ? 15 : 16.sp,
+              color: Colors.white70,
+            ),
+            SizedBox(width: isDesktop ? 8 : 8.w),
             Expanded(
               child: Text(
                 address,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  fontSize: 12.sp,
+                  fontSize: isDesktop ? 12 : 12.sp,
                   fontWeight: FontWeight.w500,
                   color: Colors.white,
                 ),
