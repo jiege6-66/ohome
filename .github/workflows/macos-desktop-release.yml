@@ -1,0 +1,63 @@
+name: macOS Desktop Release
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+
+    steps:
+      - name: Require tag ref
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF_TYPE}" != "tag" ]]; then
+            echo "This workflow must run on a tag ref."
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Enable macOS desktop support
+        shell: bash
+        working-directory: app
+        run: |
+          flutter config --enable-macos-desktop
+
+      - name: Build and package macOS desktop app
+        shell: bash
+        working-directory: app
+        run: |
+          chmod +x ensure_macos_platform.sh build_macos_release.sh
+          BUILD_METADATA_FILE="$RUNNER_TEMP/ohome-macos-release.env" \
+          CI_BUILD_NUMBER="${GITHUB_RUN_NUMBER}" \
+          RELEASE_TAG="${GITHUB_REF_NAME}" \
+          bash build_macos_release.sh
+
+          cat "$RUNNER_TEMP/ohome-macos-release.env" >> "$GITHUB_ENV"
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          generate_release_notes: true
+          overwrite_files: true
+          fail_on_unmatched_files: true
+          files: |
+            app/${{ env.MACOS_ZIP_PATH }}
+            app/${{ env.MACOS_CHECKSUM_PATH }}

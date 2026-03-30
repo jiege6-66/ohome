@@ -36,7 +36,7 @@
 
 ## 快速上手
 1. 先启动服务端
-2. 再安装 Android 客户端
+2. 再安装 Android 客户端（本 fork 也可通过 GitHub Actions 发布 macOS Desktop 客户端压缩包）
 3. 在客户端登录页通过局域网发现或手动输入服务端地址完成连接
 
 
@@ -80,6 +80,8 @@ docker run -d --name ohome-server --restart unless-stopped -p 18090:18090 -v /op
 ### 客户端适合做什么
 
 客户端是 Flutter 应用，当前主要面向 Android 使用，负责登录、资源浏览、播放、网盘管理、待办和提醒等交互能力。
+
+本 fork 额外补了一条 **macOS Desktop 自动构建链路**：当推送 tag 时，GitHub Actions 会自动生成 macOS 平台宿主工程、编译桌面客户端并把 `.app` 打成 zip 发布到 GitHub Release。当前 macOS 包为 **未签名 / 未公证** 的实验版，首次打开可能需要在系统安全设置中手动放行；应用内更新暂不支持，但手动输入服务端地址与已记住服务端回连可用，mDNS 发现也已放开。
 
 ### 默认超级管理员账号密码
 

@@ -93,7 +93,11 @@ class AppUpdateService extends GetxService {
       throw ApiException('开发环境已禁用在线更新');
     }
     if (!GetPlatform.isAndroid) {
-      throw ApiException('当前平台不支持 APK 在线更新');
+      throw ApiException(
+        GetPlatform.isMacOS
+            ? 'macOS 客户端暂不支持应用内更新，请到 GitHub Releases 下载新版压缩包后手动替换。'
+            : '当前平台不支持 APK 在线更新',
+      );
     }
     if (isUpdating.value) {
       throw ApiException('已有更新任务正在进行中');

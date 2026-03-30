@@ -33,11 +33,11 @@ class DiscoveryService {
     final activeCidr = await _getActiveIpv4Cidr();
     final merged = <String, DiscoveredServer>{};
     final probedOrigins = <String>{};
+    final supportsSubnetProbe = Platform.isAndroid && activeCidr != null;
 
     final canReuseRememberedServer =
         remembered != null &&
-        activeCidr != null &&
-        _isOriginInSameSubnet(remembered.origin, activeCidr);
+        (activeCidr == null || _isOriginInSameSubnet(remembered.origin, activeCidr));
 
     if (canReuseRememberedServer) {
       final previous = await _probeOrigin(
@@ -61,9 +61,7 @@ class DiscoveryService {
       }
     }
 
-    final mdnsServers = activeCidr == null
-        ? const <DiscoveredServer>[]
-        : await _discoverViaMdns();
+    final mdnsServers = await _discoverViaMdns();
     for (final server in mdnsServers) {
       _upsert(merged, server);
       probedOrigins.add(server.origin);
@@ -74,13 +72,13 @@ class DiscoveryService {
       ports.add(remembered.port);
     }
 
-    final scannedServers = activeCidr == null
-        ? const <DiscoveredServer>[]
-        : await _discoverViaSubnetScan(
-            activeCidr: activeCidr,
+    final scannedServers = supportsSubnetProbe
+        ? await _discoverViaSubnetScan(
+            activeCidr: activeCidr!,
             ports: ports,
             skipOrigins: probedOrigins,
-          );
+          )
+        : const <DiscoveredServer>[];
     for (final server in scannedServers) {
       _upsert(merged, server);
     }
@@ -120,7 +118,9 @@ class DiscoveryService {
   }
 
   Future<List<DiscoveredServer>> _discoverViaMdns() async {
-    if (!Platform.isAndroid) return const <DiscoveredServer>[];
+    if (!Platform.isAndroid && !Platform.isMacOS) {
+      return const <DiscoveredServer>[];
+    }
 
     final client = MDnsClient();
     final discovered = <String, DiscoveredServer>{};
